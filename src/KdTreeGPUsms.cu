@@ -280,7 +280,7 @@ KdNode* KdNode::createKdTree(KdNode kdNodes[], KdCoord coordinates[],  const sin
  *
  * returns: a list that contains the kdNodes that lie within the cutoff distance of the query node
  */
-list<KdNode> KdNode::searchKdTree(const KdNode kdNodes[], const KdCoord coords[], const KdCoord* query, const KdCoord cut,
+list<KdNode> KdNode::searchKdTree(const KdNode kdNodes[], const KdCoord coords[], const KdCoord* query, const sint cut,
 		const sint dim, const sint depth) const {
 
 	// The partition cycles as x, y, z, w...
