@@ -453,7 +453,7 @@ void custom_funct( KdCoord* coordinates, sint numPoints, sint searchDistance, Kd
 
 /* Create a simple k-d tree and print its topology for inspection. */
 
-
+/*
 sint main(sint argc, char **argv)
 {
 	// Set the defaults then parse the input arguments.
@@ -576,7 +576,7 @@ sint main(sint argc, char **argv)
 			cout << " ";
 		}
 		cout << endl;
-	} */
+	} 
 	return 0;
 }
-
+*/
