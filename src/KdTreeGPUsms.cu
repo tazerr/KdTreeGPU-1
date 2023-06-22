@@ -378,13 +378,16 @@ extern "C" {
 
 void custom_funct( KdCoord* coordinates, sint numPoints, sint searchDistance, KdCoord* query)
 {
+	//numPoints =  1024;//4194304;
 	sint extraPoints = 100;
 	sint numDimensions = 3;
 	sint numThreads = 512;
-	sint numBlocks = 32;
+	sint numBlocks = 1;
+	//searchDistance = 20000;
 	sint maximumNumberOfNodesToPrint = 5;
 	
 	sint  i = maximumNumberOfNodesToPrint + numDimensions + extraPoints;
+	
 	
 	//GPU
 	Gpu::gpuSetup(2, numThreads,numBlocks,numDimensions);
@@ -404,6 +407,33 @@ void custom_funct( KdCoord* coordinates, sint numPoints, sint searchDistance, Kd
     {7,2,6}, {4,7,9}, {1,6,8}, {3,4,5}, {9,4,1} };
 	*/
 	
+	/*
+	srand(0);
+	KdCoord *(coordinates) = new KdCoord[numPoints*numDimensions];
+	for (sint i = 0; i<numPoints; i++) {
+		for (sint j=0; j<numDimensions; j++) {
+			if (j==0) coordinates[i*numDimensions+j]=  i*22/7;//(i%32)/(31.0)*10.0;
+			else if (j==1) coordinates[i*numDimensions+j] = ((i/32))/(31.0)*10.0;
+			else coordinates[i*numDimensions+j] = 0.0;
+			
+			//coordinates[i*numDimensions+j] = (KdCoord)rand();
+			//coordinates[i*numDimensions+j] = (j==1)? (numPoints-i) : i;
+			//coordinates[i*numDimensions+j] =  i;
+		}
+	}
+
+	
+	for (sint i = 0; i<numPoints; i++) {
+		for (sint j=0; j<numDimensions; j++) {
+			cout << coordinates[i*numDimensions+j] << endl;
+			//coordinates[i*numDimensions+j] = (j==1)? (numPoints-i) : i;
+			//coordinates[i*numDimensions+j] =  i;
+		}
+	}
+
+	*/
+	
+
 	// Create the k-d tree.  First copy the data to a tuple in its kdNode.
 	// also null out the gt and lt references
 	// create and initialize the kdNodes array
@@ -413,14 +443,29 @@ void custom_funct( KdCoord* coordinates, sint numPoints, sint searchDistance, Kd
 		exit (1);
 	}
 	
+	/*for (int xy=0;xy<numPoints;xy++) {
+		for (int yz=0;yz<3;yz++) {
+			if (yz==0) cout << "XCOORDINATE " << xy << "=" << coordinates[xy*numDimensions +yz] << endl;
+			else if (yz==1) cout << "YCOORDINATE " << xy << "=" << coordinates[xy*numDimensions +yz] << endl;
+			else cout << "ZCOORDINATE " << xy << "=" << coordinates[xy*numDimensions +yz] << endl;
+		}
+	}*/
+	
 	//MAKE KDTREE
 	KdNode *root = KdNode::createKdTree(kdNodes, coordinates, numDimensions, numPoints);
 	
+	
 	cout << endl;
+
+	cout<<"KD TREE MADE "<<endl;
 
 	TIMER_DECLARATION();
 	
 	// Search the k-d tree for the k-d nodes that lie within the cutoff distance of the first tuple.
+	query = (KdCoord *)malloc(numDimensions * sizeof(KdCoord));
+	for (sint i = 0; i < numDimensions; i++) {
+		query[i] = coordinates[i];
+	}
 	
 	// read the KdTree back from GPU
 	Gpu::getKdTreeResults( kdNodes,  coordinates, numPoints, numDimensions);
@@ -457,41 +502,41 @@ void custom_funct( KdCoord* coordinates, sint numPoints, sint searchDistance, Kd
 sint main(sint argc, char **argv)
 {
 	// Set the defaults then parse the input arguments.
-	sint nnumPoints = 4194304;
-	sint eextraPoints = 100;
-	sint nnumDimensions = 3;
-	sint nnumThreads = 512;
-	sint nnumBlocks = 32;
-	sint ssearchDistance = 20000000;
-	sint mmaximumNumberOfNodesToPrint = 5;
+	sint numPoints =  4194304;//4194304;
+	sint extraPoints = 100;
+	sint numDimensions = 3;
+	sint numThreads = 512;
+	sint numBlocks = 32;
+	sint searchDistance = 20000000;
+	sint maximumNumberOfNodesToPrint = 5;
 
 	for (sint i = 1; i < argc; i++) {
 		if ( 0 == strcmp(argv[i], "-n") || 0 == strcmp(argv[i], "--numPoints") ) {
-			nnumPoints = atol(argv[++i]);
+			numPoints = atol(argv[++i]);
 			continue;
 		}
 		if ( 0 == strcmp(argv[i], "-x") || 0 == strcmp(argv[i], "--extraPoints") ) {
-			eextraPoints = atol(argv[++i]);
+			extraPoints = atol(argv[++i]);
 			continue;
 		}
 		if ( 0 == strcmp(argv[i], "-d") || 0 == strcmp(argv[i], "--numDimensions") ) {
-			nnumDimensions = atol(argv[++i]);
+			numDimensions = atol(argv[++i]);
 			continue;
 		}
 		if ( 0 == strcmp(argv[i], "-t") || 0 == strcmp(argv[i], "--numThreads") ) {
-			nnumThreads = atol(argv[++i]);
+			numThreads = atol(argv[++i]);
 			continue;
 		}
 		if ( 0 == strcmp(argv[i], "-b") || 0 == strcmp(argv[i], "--numBlocks") ) {
-			nnumBlocks = atol(argv[++i]);
+			numBlocks = atol(argv[++i]);
 			continue;
 		}
 		if ( 0 == strcmp(argv[i], "-s") || 0 == strcmp(argv[i], "--searchDistance") ) {
-			ssearchDistance = atol(argv[++i]);
+			searchDistance = atol(argv[++i]);
 			continue;
 		}
 		if ( 0 == strcmp(argv[i], "-p") || 0 == strcmp(argv[i], "--maximumNodesToPrint") ) {
-			mmaximumNumberOfNodesToPrint = atol(argv[++i]);
+			maximumNumberOfNodesToPrint = atol(argv[++i]);
 			continue;
 		}
 		cout << "Unsupported command-line argument: " <<  argv[i] << endl;
@@ -522,7 +567,7 @@ sint main(sint argc, char **argv)
 
 	srand(0);
 	KdCoord (*coordinates) = new KdCoord[numPoints*numDimensions];
-	for ( i = 0; i<numPoints; i++) {
+	for (sint i = 0; i<numPoints; i++) {
 		for (sint j=0; j<numDimensions; j++) {
 			coordinates[i*numDimensions+j] = (KdCoord)rand();
 			//coordinates[i*numDimensions+j] = (j==1)? (numPoints-i) : i;
