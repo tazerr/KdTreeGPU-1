@@ -30,6 +30,7 @@ program mainn
   	integer, allocatable :: NI(:), NJ(:), NK(:)
   	real, allocatable :: xgrid(:,:,:,:), ygrid(:,:,:,:), zgrid(:,:,:,:)
   	character(100) :: filename="grid.xyz"
+	real :: lx, ly
 
   	! Open the file for reading
   	open(unit=1, file=trim(filename), form='unformatted', status='old', access='sequential')
@@ -46,18 +47,39 @@ program mainn
     	read(1) NI(nbl), NJ(nbl), NK(nbl)
   	end do
 
-  	! Allocate arrays to store xgrid, ygrid, zgrid
+	NI(1) = 32
+	NJ(1) = 32
+	NK(1) = 1
+
+	lx = 10.0
+	ly = 10.0
+
+	! Allocate arrays to store xgrid, ygrid, zgrid
   	allocate(xgrid(maxval(NI), maxval(NJ), maxval(NK), nblocks))
   	allocate(ygrid(maxval(NI), maxval(NJ), maxval(NK), nblocks))
   	allocate(zgrid(maxval(NI), maxval(NJ), maxval(NK), nblocks))
 
-  	! Read the xgrid, ygrid, zgrid values for each block
-  	do nbl = 1, nblocks
-    	read(1) (((xgrid(i,j,k,nbl), i=1,NI(nbl)), j=1,NJ(nbl)), k=1,NK(nbl))    &
-    		,              (((ygrid(i,j,k,nbl), i=1,NI(nbl)), j=1,NJ(nbl)), k=1,NK(nbl))    &
-		,              (((zgrid(i,j,k,nbl), i=1,NI(nbl)), j=1,NJ(nbl)), k=1,NK(nbl))
+	do nbl=1,nblocks
+		do k=1,NK(nbl)
+			do j=1,NJ(nbl)
+				do i=1,NI(nbl)
+					xgrid(i,j,k,nbl) = ((j-1)*32+i)*22/7
+					!(i-1)/(NI(nbl)-1.0)*lx
+					ygrid(i,j,k,nbl) = (j-1)/(NJ(nbl)-1.0)*ly
+					zgrid(i,j,k,nbl) = 0.0
+				end do
+			end do
+		end do
+	end do
 
-  	end do
+  	
+  	! Read the xgrid, ygrid, zgrid values for each block
+  	!do nbl = 1, nblocks
+    !	read(1) (((xgrid(i,j,k,nbl), i=1,NI(nbl)), j=1,NJ(nbl)), k=1,NK(nbl))    &
+    !		,              (((ygrid(i,j,k,nbl), i=1,NI(nbl)), j=1,NJ(nbl)), k=1,NK(nbl))    &
+	!	,              (((zgrid(i,j,k,nbl), i=1,NI(nbl)), j=1,NJ(nbl)), k=1,NK(nbl))
+
+  	!end do
 
   	! Close the file
  	close(1)
@@ -96,7 +118,7 @@ program mainn
   	
   	! integer(c_int), value :: searchDistance
   	! Initialize the value of the search distance from the queryPoints
-  	searchDistance = 30
+  	searchDistance = 2
   	
   	! Build the coordinate array which the CUDA function is expecting {{x1,y1,z1},{x2,y2,z2}....}
   	! real(c_float), dimension(sizeOfarray) :: coordinates
@@ -124,16 +146,16 @@ program mainn
   		end do
   	end do
   	
-  	i=1
-  	j=1
+  	! i=1
+  	! j=1
   	
-  	do while (i<=size(coordinates))
-    	write(*, *) "X (", j, ") : ", coordinates(i)
-    	write(*, *) "Y (", j, ") : ", coordinates(i+1)
-    	write(*, *) "Z (", j, ") : ", coordinates(i+2)
-    	j=j+1
-    	i=i+3
-  	end do
+  	! do while (i<=size(coordinates))
+    !	write(*, *) "X (", j, ") : ", coordinates(i)
+    !	write(*, *) "Y (", j, ") : ", coordinates(i+1)
+    !	write(*, *) "Z (", j, ") : ", coordinates(i+2)
+    !	j=j+1
+    !	i=i+3
+  	! end do
   	
   	call custom_funct(coordinates, numPoints, searchDistance, query)
   	
