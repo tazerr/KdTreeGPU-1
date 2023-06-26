@@ -2,12 +2,14 @@ module call_kd_tree
     use iso_c_binding
     implicit none
     interface
-        subroutine custom_funct(coordinates, numPoints, searchDistance, query) bind(C, name="custom_funct")
+        subroutine custom_funct(coordinates, numPoints, searchDistance, query, results, numResults) bind(C, name="custom_funct")
             use iso_c_binding
             real(c_float), dimension(*) :: coordinates
             integer(c_int), value :: numPoints
             integer(c_int), value :: searchDistance
             real(c_float), dimension(*) :: query
+			real(c_float), dimension(*) :: results
+			integer(c_int), value :: numResults
         end subroutine
     end interface
 end module call_kd_tree
@@ -20,10 +22,10 @@ program mainn
   	! integer, allocatable :: NI(:), NJ(:), NK(:)
   	! real, allocatable :: xgrid(:,:,:,:), ygrid(:,:,:,:), zgrid(:,:,:,:)
   	! character(50) :: filename = "grid.xyz"
-  	integer(c_int) :: numPoints
+  	integer(c_int) :: numPoints, numResults
   	integer :: numDimension = 3
   	integer :: sizeOfarray 
-  	real(c_float), allocatable :: coordinates(:)
+  	real(c_float), allocatable :: coordinates(:), results(:)
   	real(c_float), dimension(3) :: query
   	integer(c_int) :: searchDistance
   	integer :: nblocks, nbl, i, j, k, index
@@ -156,8 +158,14 @@ program mainn
     !	j=j+1
     !	i=i+3
   	! end do
+
+	! Prompt the user to enter the number of points closest points required
+  	write(*,*) "Enter the number of points (integer) required:"
+  	read(*,*) numResults
+
+	allocate(results(numResults*numDimension))
   	
-  	call custom_funct(coordinates, numPoints, searchDistance, query)
+  	call custom_funct(coordinates, numPoints, searchDistance, query, results, numResults)
   	
   	! Deallocate arrays
   	deallocate(NI, NJ, NK)
