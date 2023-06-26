@@ -373,10 +373,10 @@ void KdNode::printKdTree(KdNode kdNodes[], const KdCoord coords[], const sint di
 */
 
 extern "C" {
-    void custom_funct(KdCoord* coordinates, sint numPoints, sint searchDistance, KdCoord* query);
+    void custom_funct(KdCoord* coordinates, sint numPoints, sint searchDistance, KdCoord* query, KdCoord* results, sint numResults);
 }
 
-void custom_funct( KdCoord* coordinates, sint numPoints, sint searchDistance, KdCoord* query)
+void custom_funct( KdCoord* coordinates, sint numPoints, sint searchDistance, KdCoord* query, KdCoord* results, sint numResults)
 {
 	//numPoints =  1024;//4194304;
 	sint extraPoints = 100;
