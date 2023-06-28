@@ -109,6 +109,7 @@ void searchKDTree(KDNode* node, Point3D query, priority_queue<pair<double, KDNod
     return;
 }
 
+/*
 int main() {
 
     priority_queue<pair<double, KDNode*>, vector<pair<double, KDNode*>>, QueueComparator> pq;
@@ -157,3 +158,4 @@ int main() {
 
     return 0;
 }
+*/
