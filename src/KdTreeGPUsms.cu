@@ -82,6 +82,11 @@
 #include <math.h>
 #include <iostream>
 #include <iomanip>
+#include <queue>
+#include <algorithm>
+#include <cmath>
+#include <limits>
+
 using std::setprecision;
 
 using namespace std;
@@ -267,6 +272,62 @@ KdNode* KdNode::createKdTree(KdNode kdNodes[], KdCoord coordinates[],  const sin
 	return &kdNodes[root];
 }
 
+// Define a comparator for the priority queue
+struct QueueComparator {
+    bool operator() (const pair<double, const KdNode*>& lhs, const pair<double, const KdNode*>& rhs) const {
+        return lhs.first < rhs.first;
+    }
+};
+
+// Define a function to calculate the distance between two points in 3D space
+double euclideanDistance(const KdNode* p1, const KdCoord* query, const KdCoord coords[], const sint dim) {
+    double dx = coords[p1->tuple*dim + 0] - query[0];
+    double dy = coords[p1->tuple*dim + 1] - query[1];
+    double dz = coords[p1->tuple*dim + 2] - query[2];
+    return (dx*dx + dy*dy + dz*dz);
+}
+
+void csearchKdTree(KdNode *node, KdNode kdNodes[], const KdCoord coords[], const KdCoord* query, const sint numResults,
+		const sint dim, sint i, priority_queue<pair<double, KdNode*>, vector<pair<double, KdNode*>>, QueueComparator> &pq) {
+
+	
+	if (node->tuple==-1) return;
+
+	double curr_dist = euclideanDistance(node, query, coords, dim);
+
+	if (pq.size() < numResults) pq.push({curr_dist, node});
+	else if (curr_dist < pq.top().first) {
+		pq.pop();
+        pq.push({curr_dist, node});
+	}
+
+	double perp_;
+
+	perp_ = coords[node->tuple*dim + i] - query[i];
+
+	i = (i+1) % 3;
+
+	if (pow(perp_,2)<pq.top().first){
+		csearchKdTree(&kdNodes[node->ltChild], kdNodes, coords, query, numResults, dim, i, pq);
+        //csearchKdTree(node->left, query, pq, k, i);
+
+		csearchKdTree(&kdNodes[node->gtChild], kdNodes, coords, query, numResults, dim, i, pq);
+        //csearchKdTree(node->right, query, pq, k, i);
+    }
+
+	else {
+        if (perp_<0) {
+            csearchKdTree(&kdNodes[node->gtChild], kdNodes, coords, query, numResults, dim, i, pq);
+			//searchKDTree(node->right, query, pq, k, i);
+        }
+        else {
+			csearchKdTree(&kdNodes[node->ltChild], kdNodes, coords, query, numResults, dim, i, pq);
+		}
+    }
+
+    return;
+
+}
 /*
  * Search the k-d tree and find the KdNodes that lie within a cutoff distance
  * from a query node in all k dimensions.
@@ -280,6 +341,7 @@ KdNode* KdNode::createKdTree(KdNode kdNodes[], KdCoord coordinates[],  const sin
  *
  * returns: a list that contains the kdNodes that lie within the cutoff distance of the query node
  */
+/*
 list<KdNode> KdNode::searchKdTree(const KdNode kdNodes[], const KdCoord coords[], const KdCoord* query, const sint cut,
 		const sint dim, const sint depth) const {
 
@@ -321,7 +383,7 @@ list<KdNode> KdNode::searchKdTree(const KdNode kdNodes[], const KdCoord coords[]
 	}
 
 	return result;
-}
+}*/
 
 /*
  * Print one tuple.
@@ -358,6 +420,14 @@ void KdNode::printKdTree(KdNode kdNodes[], const KdCoord coords[], const sint di
 		kdNodes[ltChild].printKdTree(kdNodes, coords, dim, depth+1);
 	}
 }
+
+/*
+ *CUSTOM SEARCHKDTREE FUNCTION
+ *CUSTOM SEARCHKDTREE FUNCTION
+ *CUSTOM SEARCHKDTREE FUNCTION
+ *CUSTOM SEARCHKDTREE FUNCTION
+ *CUSTOM SEARCHKDTREE FUNCTION
+*/
 
 /*
  * custom function
