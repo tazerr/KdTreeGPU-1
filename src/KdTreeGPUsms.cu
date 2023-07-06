@@ -280,7 +280,7 @@ struct QueueComparator {
 };
 
 // Define a function to calculate the distance between two points in 3D space
-double euclideanDistance(const KdNode* p1, const KdCoord* query, const KdCoord coords[], const sint dim) {
+double euclideanDistance(KdNode* p1, const KdCoord* query, const KdCoord coords[], const sint dim) {
     double dx = coords[p1->tuple*dim + 0] - query[0];
     double dy = coords[p1->tuple*dim + 1] - query[1];
     double dz = coords[p1->tuple*dim + 2] - query[2];
@@ -299,13 +299,14 @@ double euclideanDistance(const KdNode* p1, const KdCoord* query, const KdCoord c
 void csearchKdTree(KdNode *node, KdNode kdNodes[], const KdCoord coords[], const KdCoord* query, const sint numResults,
 		const sint dim, sint i, priority_queue<pair<double, KdNode*>, vector<pair<double, KdNode*>>, QueueComparator> &pq) {
 
-	
-	if (node->tuple==-1) return;
-
 	double curr_dist = euclideanDistance(node, query, coords, dim);
 
-	if (pq.size() < numResults) pq.push({curr_dist, node});
-	else if (curr_dist < pq.top().first) {
+	if (pq.size() < numResults) 
+	{
+		pq.push({curr_dist, node});
+	}
+	else if (curr_dist < pq.top().first) 
+	{
 		pq.pop();
         pq.push({curr_dist, node});
 	}
@@ -317,20 +318,33 @@ void csearchKdTree(KdNode *node, KdNode kdNodes[], const KdCoord coords[], const
 	i = (i+1) % 3;
 
 	if (pow(perp_,2)<pq.top().first){
-		csearchKdTree(&kdNodes[node->ltChild], kdNodes, coords, query, numResults, dim, i, pq);
-        //csearchKdTree(node->left, query, pq, k, i);
 
-		csearchKdTree(&kdNodes[node->gtChild], kdNodes, coords, query, numResults, dim, i, pq);
-        //csearchKdTree(node->right, query, pq, k, i);
+		if (node->ltChild!=-1)
+		{
+			csearchKdTree(&kdNodes[node->ltChild], kdNodes, coords, query, numResults, dim, i, pq);
+		}
+		
+		if (node->gtChild!=-1)
+		{
+			csearchKdTree(&kdNodes[node->gtChild], kdNodes, coords, query, numResults, dim, i, pq);
+		}
     }
 
-	else {
-        if (perp_<0) {
-            csearchKdTree(&kdNodes[node->gtChild], kdNodes, coords, query, numResults, dim, i, pq);
-			//searchKDTree(node->right, query, pq, k, i);
+	else 
+	{
+        if (perp_<0) 
+		{
+			if (node->gtChild!=-1)
+			{
+            	csearchKdTree(&kdNodes[node->gtChild], kdNodes, coords, query, numResults, dim, i, pq);
+			}	
         }
-        else {
-			csearchKdTree(&kdNodes[node->ltChild], kdNodes, coords, query, numResults, dim, i, pq);
+        else 
+		{
+			if (node->ltChild!=-1)
+			{
+				csearchKdTree(&kdNodes[node->ltChild], kdNodes, coords, query, numResults, dim, i, pq);
+			}
 		}
     }
 
@@ -449,12 +463,10 @@ extern "C" {
 */
 void custom_funct( KdCoord* coordinates, sint numPoints, sint searchDistance, KdCoord* query, KdCoord* results, sint numResults)
 {
-	//numPoints =  1024;//4194304;
 	sint extraPoints = 100;
 	sint numDimensions = 3;
 	sint numThreads = 512;
-	sint numBlocks = 1;
-	//searchDistance = 20000;
+	sint numBlocks = 16;
 	sint maximumNumberOfNodesToPrint = 5;
 	
 	sint  i = maximumNumberOfNodesToPrint + numDimensions + extraPoints;
@@ -467,43 +479,6 @@ void custom_funct( KdCoord* coordinates, sint numPoints, sint searchDistance, Kd
 		exit(1);
 	}
 	cout << "Points = " << numPoints << " dimensions = " << numDimensions << ", threads = " << numThreads << ", blocks = " << numBlocks << endl;
-	
-	// Declare the two-dimensional coordinates array that contains (x,y,z) coordinates.
-	/*
-    sint coordinates[NUM_TUPLES][DIMENSIONS] = {
-    {2,3,3}, {5,4,2}, {9,6,7}, {4,7,9}, {8,1,5},
-    {7,2,6}, {9,4,1}, {8,4,2}, {9,7,8}, {6,3,1},
-    {3,4,5}, {1,6,8}, {9,5,3}, {2,1,3}, {8,7,6},
-    {5,4,2}, {6,3,1}, {8,7,6}, {9,6,7}, {2,1,3},
-    {7,2,6}, {4,7,9}, {1,6,8}, {3,4,5}, {9,4,1} };
-	*/
-	
-	/*
-	srand(0);
-	KdCoord *(coordinates) = new KdCoord[numPoints*numDimensions];
-	for (sint i = 0; i<numPoints; i++) {
-		for (sint j=0; j<numDimensions; j++) {
-			if (j==0) coordinates[i*numDimensions+j]=  i*22/7;//(i%32)/(31.0)*10.0;
-			else if (j==1) coordinates[i*numDimensions+j] = ((i/32))/(31.0)*10.0;
-			else coordinates[i*numDimensions+j] = 0.0;
-			
-			//coordinates[i*numDimensions+j] = (KdCoord)rand();
-			//coordinates[i*numDimensions+j] = (j==1)? (numPoints-i) : i;
-			//coordinates[i*numDimensions+j] =  i;
-		}
-	}
-
-	
-	for (sint i = 0; i<numPoints; i++) {
-		for (sint j=0; j<numDimensions; j++) {
-			cout << coordinates[i*numDimensions+j] << endl;
-			//coordinates[i*numDimensions+j] = (j==1)? (numPoints-i) : i;
-			//coordinates[i*numDimensions+j] =  i;
-		}
-	}
-
-	*/
-	
 
 	// Create the k-d tree.  First copy the data to a tuple in its kdNode.
 	// also null out the gt and lt references
@@ -513,14 +488,6 @@ void custom_funct( KdCoord* coordinates, sint numPoints, sint searchDistance, Kd
 		printf("Can't allocate %d kdNodes\n", numPoints);
 		exit (1);
 	}
-	
-	/*for (int xy=0;xy<numPoints;xy++) {
-		for (int yz=0;yz<3;yz++) {
-			if (yz==0) cout << "XCOORDINATE " << xy << "=" << coordinates[xy*numDimensions +yz] << endl;
-			else if (yz==1) cout << "YCOORDINATE " << xy << "=" << coordinates[xy*numDimensions +yz] << endl;
-			else cout << "ZCOORDINATE " << xy << "=" << coordinates[xy*numDimensions +yz] << endl;
-		}
-	}*/
 	
 	//MAKE KDTREE
 	KdNode *root = KdNode::createKdTree(kdNodes, coordinates, numDimensions, numPoints);
@@ -550,25 +517,19 @@ void custom_funct( KdCoord* coordinates, sint numPoints, sint searchDistance, Kd
 #endif
 	TIMER_START();
 	
-	list<KdNode> kdList = root->searchKdTree(kdNodes, coordinates, query, searchDistance, numDimensions, 0);
+	//list<KdNode> kdList = root->searchKdTree(kdNodes, coordinates, query, searchDistance, numDimensions, 0);
 	
 	priority_queue<pair<double, KdNode*>, vector<pair<double, KdNode*>>, QueueComparator> pq;
-	//csearchKdTree(root, kdNodes, coordinates, query, numResults, numDimensions, 0, pq);
+	csearchKdTree(root, kdNodes, coordinates, query, numResults, numDimensions, 0, pq);
 	
 	TIMER_STOP(double searchTime);
 	cout << "searchTime = " << fixed << setprecision(2) << searchTime << " seconds" << endl << endl;
 
-	/*
-	cout << endl << pq.size() << " nodes found closest";
+	
+	cout << endl << pq.size() << " closest nodes found to the point ";
 	KdNode::printTuple(query, numDimensions);
-	cout << " in all dimensions." << endl << endl;
-	*/
+	cout << endl;
 
-	cout << endl << kdList.size() << " nodes within " << searchDistance << " units of ";
-	KdNode::printTuple(query, numDimensions);
-	cout << " in all dimensions." << endl << endl;
-
-	/*
 	sint it=0;
 	while (!pq.empty()) {
 		for (sint i = 0; i < numDimensions; i++)
@@ -576,31 +537,49 @@ void custom_funct( KdCoord* coordinates, sint numPoints, sint searchDistance, Kd
 			results[it*numDimensions+i] = coordinates[((pq.top().second->tuple)*numDimensions)+i];
 		}
         pq.pop();
+		it++;
     }
-	*/
-
 	
+		
+	/*
+	cout << endl << kdList.size() << " nodes within " << searchDistance << " units of ";
+	KdNode::printTuple(query, numDimensions);
+	cout << " in all dimensions." << endl << endl;
+
 	if (kdList.size() != 0) {
 		cout << "List of k-d nodes within " << searchDistance << "-unit search distance follows:" << endl << endl;
 		list<KdNode>::iterator it;
 		sint r=0;
 		for (it = kdList.begin(); it != kdList.end(); it++) {
 			KdNode::printTuple(coordinates+it->getTuple()*numDimensions, numDimensions);
-
 			KdCoord *tup = coordinates+it->getTuple()*numDimensions;
-			
-			for(sint dimit=0; dimit<numDimensions; dimit++)
+
+			double curr_dist = euclideanDistance(&(*it), query, coordinates, numDimensions);
+			if (pq.size() < numResults) 
 			{
-				results[r*numDimensions+dimit] = tup[dimit];
+				pq.push({curr_dist, &(*it)});
 			}
-			r++;
-			
+			else if (curr_dist < pq.top().first) 
+			{
+				pq.pop();
+				pq.push({curr_dist, &(*it)});
+			}
+
 			cout << " ";
 		}
 		cout << endl;
 	}
-	
 
-	
+	sint it=0;
+	while (!pq.empty()) {
+		for (sint i = 0; i < numDimensions; i++)
+		{
+			results[it*numDimensions+i] = coordinates[((pq.top().second->tuple)*numDimensions)+i];
+		}
+        pq.pop();
+		it++;
+    }
+	*/
 	
 }
+
