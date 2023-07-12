@@ -710,6 +710,7 @@ refIdx_t Gpu::buildKdTree(KdNode kdNodes[], const sint numTuples, const sint dim
 
 	for (int gpuCnt = 0;  gpuCnt<numGPUs; gpuCnt++) gpus[gpuCnt]->closeBuildKdTree();
 
+	printf("firstNOde value: %d \n", firstNode);
 	return firstNode;
 
 }
@@ -802,6 +803,8 @@ __global__ void cuVerifyKdTree(const KdNode kdNodes[], const KdCoord coord[], si
 	}
 	if (tid == 0)
 		g_sums[blockIdx.x] += myCount; // and save off this block's sum.
+
+	//printf("cuVerify ke andar se coordi of root: %f \n", coord[kdNodes[].tuple]);
 }
 
 /*
@@ -1180,6 +1183,12 @@ void Gpu::gpuSetup(int gpu_max, int threads, int blocks, int dim){
 	}
 #endif
 }
+
+void Gpu::seachKdTree(refIdx_t root, const KdCoord* query, const sint numResults, const sint dim, 
+	sint axis, pair_coord_dist* pq, sint counter) {
+		printf("Hello World! \n");
+		//for (int gpuCnt = 0;  gpuCnt<numGPUs; gpuCnt++) gpus[gpuCnt]
+	}
 
 
 

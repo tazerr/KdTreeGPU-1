@@ -46,6 +46,12 @@ using namespace std;
 
 #include "KdNode.h"
 
+// Define a struct to hold coordinate index and corresponding distance
+struct pair_coord_dist {
+	double dist;
+	KdNode* pnt;
+};
+
 class Gpu {
 	// Gpu class constants;
 	static const uint MAX_THREADS = 1024;
@@ -74,6 +80,7 @@ public:
 	static refIdx_t buildKdTree(KdNode kdNodes[], const sint numTuples, const sint dim);
 	static sint     verifyKdTree(KdNode kdNodes[], const sint root, const sint dim, const sint numTuples);
 	static void     getKdTreeResults(KdNode kdNodes[], KdCoord coord[], const sint numTuples, const sint dim);
+	static void     seachKdTree(refIdx_t root, const KdCoord* query, const sint numResults, const sint dim, sint axis, pair_coord_dist* pq, sint counter);
 	static int      getNumThreads() {
 		if (numGPUs==2) {
 			if  (gpus[0] == NULL || gpus[1] == NULL) return 0;

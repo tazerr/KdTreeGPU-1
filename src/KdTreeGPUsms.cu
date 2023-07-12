@@ -268,6 +268,8 @@ KdNode* KdNode::createKdTree(KdNode kdNodes[], KdCoord coordinates[],  const sin
 			<< "  initTime = " << initTime << "  sortTime + removeDuplicatesTime = " << sortTime
 			<< "  kdTime = " << kdTime << "  verifyTime = " << verifyTime << endl << endl;
 
+	cout << "create tree ka root: " << root<< endl;
+	
 	// Return the pointer to the root of the k-d tree.
 	return &kdNodes[root];
 }
@@ -353,59 +355,22 @@ void csearchKdTree(KdNode *node, KdNode kdNodes[], const KdCoord coords[], const
 }
 
 /*
- * Search the k-d tree and find the KdNodes that lie within a cutoff distance
- * from a query node in all k dimensions.
- *
+ * call the search the k-d tree  function and find the numResults number KdNodes 
+ * that lie closest to the query point. It calls the GPU functions to search
+ * closest points on gpu itseld
  * calling parameters:
  *
- * query - the query point
- * cut - the cutoff distance
+ * root - index of root node of the kdtree in the Kdnode array
+ * query - pointer to the query point tuple
+ * numResult - number of k nn rewuired
  * dim - the number of dimensions
- * depth - the depth in the k-d tree
- *
- * returns: a list that contains the kdNodes that lie within the cutoff distance of the query node
+ * pq - array that will hold the results
  */
-list<KdNode> KdNode::searchKdTree(const KdNode kdNodes[], const KdCoord coords[], const KdCoord* query, const sint cut,
-		const sint dim, const sint depth) const {
+void callsearchKdTree(refIdx_t root, const KdCoord* query, const sint numResults, const sint dim, 
+	sint axis, pair_coord_dist* pq, sint counter) {
 
-	// The partition cycles as x, y, z, w...
-	sint axis = depth % dim;
+	Gpu::seachKdTree(root, query, numResults, dim, axis, pq, counter);
 
-	// If the distance from the query node to the k-d node is within the cutoff distance
-	// in all k dimensions, add the k-d node to a list.
-	list<KdNode> result;
-	bool inside = true;
-	for (sint i = 0; i < dim; i++) {
-		if (abs(query[i] - coords[tuple*dim+i]) > cut) {
-			inside = false;
-			break;
-		}
-	}
-	if (inside) {
-		result.push_back(*this); // The push_back function expects a KdNode for a call by reference.
-	}
-
-	// Search the < branch of the k-d tree if the partition coordinate of the query point minus
-	// the cutoff distance is <= the partition coordinate of the k-d node.  The < branch must be
-	// searched when the cutoff distance equals the partition coordinate because the super key
-	// may assign a point to either branch of the tree if the sorting or partition coordinate,
-	// which forms the most significant portion of the super key, shows equality.
-	if ( ltChild != -1 && (query[axis] - cut) <= coords[tuple*dim+axis] ) {
-		list<KdNode> ltResult = kdNodes[ltChild].searchKdTree(kdNodes, coords, query, cut, dim, depth + 1);
-		result.splice(result.end(), ltResult); // Can't substitute searchKdTree(...) for ltResult.
-	}
-
-	// Search the > branch of the k-d tree if the partition coordinate of the query point plus
-	// the cutoff distance is >= the partition coordinate of the k-d node.  The < branch must be
-	// searched when the cutoff distance equals the partition coordinate because the super key
-	// may assign a point to either branch of the tree if the sorting or partition coordinate,
-	// which forms the most significant portion of the super key, shows equality.
-	if ( gtChild != -1 && (query[axis] + cut) >= coords[tuple*dim+axis] ) {
-		list<KdNode> gtResult = kdNodes[gtChild].searchKdTree(kdNodes, coords, query, cut, dim, depth + 1);
-		result.splice(result.end(), gtResult); // Can't substitute searchKdTree(...) for gtResult.
-	}
-
-	return result;
 }
 
 /*
@@ -492,35 +457,39 @@ void custom_funct( KdCoord* coordinates, sint numPoints, sint searchDistance, Kd
 	//MAKE KDTREE
 	KdNode *root = KdNode::createKdTree(kdNodes, coordinates, numDimensions, numPoints);
 	
-	
+	cout << "root ka place: " << (kdNodes-root) << endl;
 	cout << endl;
 
 	cout<<"KD TREE MADE "<<endl;
 
+	refIdx_t rootIdx = root-kdNodes;
+
+	pair_coord_dist* pq;
+
+	callsearchKdTree(rootIdx, query, numResults, numDimensions, 0, pq, 0);
+
+	/*
 	TIMER_DECLARATION();
 	
-	/*
-	// Search the k-d tree for the k-d nodes that lie within the cutoff distance of the first tuple.
-	query = (KdCoord *)malloc(numDimensions * sizeof(KdCoord));
-	for (sint i = 0; i < numDimensions; i++) {
-		query[i] = coordinates[i];
-	}
-
-	*/
 	
 	// read the KdTree back from GPU
 	Gpu::getKdTreeResults( kdNodes,  coordinates, numPoints, numDimensions);
+	printf("host ke root ka cordi: %f", coordinates[kdNodes[root-kdNodes].tuple]);
 #define VERIFY_ON_HOST
 #ifdef VERIFY_ON_HOST
 	sint numberOfNodes = root->verifyKdTree( kdNodes, coordinates, numDimensions, 0);
 	cout <<  "Number of nodes on host = " << numberOfNodes << endl;
 #endif
+	
+	
+
 	TIMER_START();
 	
 	//list<KdNode> kdList = root->searchKdTree(kdNodes, coordinates, query, searchDistance, numDimensions, 0);
 	
 	priority_queue<pair<double, KdNode*>, vector<pair<double, KdNode*>>, QueueComparator> pq;
 	csearchKdTree(root, kdNodes, coordinates, query, numResults, numDimensions, 0, pq);
+	
 	
 	TIMER_STOP(double searchTime);
 	cout << "searchTime = " << fixed << setprecision(2) << searchTime << " seconds" << endl << endl;
@@ -539,7 +508,8 @@ void custom_funct( KdCoord* coordinates, sint numPoints, sint searchDistance, Kd
         pq.pop();
 		it++;
     }
-	
+
+	*/
 		
 	/*
 	cout << endl << kdList.size() << " nodes within " << searchDistance << " units of ";
