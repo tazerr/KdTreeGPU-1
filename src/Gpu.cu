@@ -42,6 +42,7 @@
 #include <limits>
 #include <cuda_runtime.h>
 #include <omp.h>
+#include <openacc.h>
 
 // includes, project
 #include <helper_cuda.h>
@@ -710,7 +711,6 @@ refIdx_t Gpu::buildKdTree(KdNode kdNodes[], const sint numTuples, const sint dim
 
 	for (int gpuCnt = 0;  gpuCnt<numGPUs; gpuCnt++) gpus[gpuCnt]->closeBuildKdTree();
 
-	printf("firstNOde value: %d \n", firstNode);
 	return firstNode;
 
 }
@@ -870,6 +870,8 @@ void Gpu::initVerifyKdTree() {
 }
 void Gpu::closeVerifyKdTree() {
 	syncGPU();
+
+
 #pragma omp critical (launchLock)
 	{
 		setDevice();
@@ -878,6 +880,7 @@ void Gpu::closeVerifyKdTree() {
 		checkCudaErrors(cudaFree(d_midRefs[1]));
 		checkCudaErrors(cudaFree(d_sums));
 	}
+
 }
 
 /*
@@ -988,7 +991,6 @@ sint Gpu::verifyKdTreeGPU(const sint root, const sint startP, const sint dim, co
 sint Gpu::verifyKdTree(KdNode kdNodes[], const sint root, const sint dim, const sint numTuples) {
 	// Set up memory for the verify tree functions
 	for (int gpuCnt = 0;  gpuCnt<numGPUs; gpuCnt++) gpus[gpuCnt]->initVerifyKdTree();
-
 	sint nodeCnts[numGPUs]; // to store the per gpu node counts.
 	if (numGPUs==2) {
 #pragma omp parallel for
@@ -1002,8 +1004,10 @@ sint Gpu::verifyKdTree(KdNode kdNodes[], const sint root, const sint dim, const 
 	int nodeCnt = numGPUs == 2 ? 1 : 0;
 	for (int i = 0;  i<numGPUs; i++) nodeCnt += nodeCnts[i];
 	// free the memory used for verifying the tree.
+	
+	//for (int gpuCnt = 0;  gpuCnt<numGPUs; gpuCnt++) gpus[gpuCnt]->searchKdTreeGPU(root);
 	for (int gpuCnt = 0;  gpuCnt<numGPUs; gpuCnt++) gpus[gpuCnt]->closeVerifyKdTree();
-
+	
 	return nodeCnt;
 }
 
@@ -1184,11 +1188,165 @@ void Gpu::gpuSetup(int gpu_max, int threads, int blocks, int dim){
 #endif
 }
 
-void Gpu::seachKdTree(refIdx_t root, const KdCoord* query, const sint numResults, const sint dim, 
-	sint axis, pair_coord_dist* pq, sint counter) {
-		printf("Hello World! \n");
-		//for (int gpuCnt = 0;  gpuCnt<numGPUs; gpuCnt++) gpus[gpuCnt]
+/*
+ * GPU function to find the nearest neighbour 
+ * The kd tree is assumed to be stores on GPU
+ * and the result array will also be stored on GPU 
+ */
+__global__ void cusearchKdTreeGPU(KdNode *node, KdNode kdNodes[], const KdCoord coords[], const KdCoord* query, const sint* numResults,
+		const sint* dim, sint axis, pair_coord_dist* pq, sint* counter) {
+
+	pair_coord_dist nd_pair;
+	nd_pair.tpl = node->tuple;
+
+	//distCalc<<< 1, 1>>>(&nd_pair, query, coords, dim);
+	double dx = coords[(nd_pair.tpl)*(*dim) + 0] - query[0];
+    double dy = coords[(nd_pair.tpl)*(*dim) + 1] - query[1];
+    double dz = coords[(nd_pair.tpl)*(*dim) + 2] - query[2];
+
+	nd_pair.dist = (dx*dx + dy*dy + dz*dz);
+
+	double curr_dist = nd_pair.dist;
+
+	//insertSort<<< 1, 1>>>(pq, numResults);
+	if (*counter<(*numResults)) {
+		pq[*counter]=nd_pair;
+		*counter = (*counter) +1;
+		for (int i=1; i<(*counter); i++) {
+			pair_coord_dist key = pq[i];
+			int j=i-1;
+
+			while (j >= 0 && pq[j].dist > key.dist) {
+				pq[j+1] = pq[j];
+				j=j-1;
+			}
+
+			pq[j+1] = key;
+		}
+	}
+	else if (curr_dist < pq[(*numResults)-1].dist) {
+		pq[(*numResults)-1] = nd_pair;
+		for (int i=1; i<(*numResults); i++) {
+			pair_coord_dist key = pq[i];
+			int j=i-1;
+
+			while (j >= 0 && pq[j].dist > key.dist) {
+				pq[j+1] = pq[j];
+				j=j-1;
+			}
+
+			pq[j+1] = key;
+		}
 	}
 
+	double perp_ = coords[node->tuple*(*dim) + axis] - query[axis];
+
+	axis = (axis+1) % 3;
+
+	if (pow(perp_,2)<pq[*counter-1].dist){
+
+		if (node->ltChild!=-1)
+		{
+			cusearchKdTreeGPU<<< 1, 1>>>(&kdNodes[node->ltChild], kdNodes, coords, query, numResults, dim, axis, pq, counter);
+		}
+		
+		if (node->gtChild!=-1)
+		{
+			cusearchKdTreeGPU<<< 1, 1>>>(&kdNodes[node->gtChild], kdNodes, coords, query, numResults, dim, axis, pq, counter);
+		}
+    }
+
+	else 
+	{
+        if (perp_<0) 
+		{
+			if (node->gtChild!=-1)
+			{
+				cusearchKdTreeGPU<<< 1, 1>>>(&kdNodes[node->gtChild], kdNodes, coords, query, numResults, dim, axis, pq, counter);
+			}	
+        }
+        else 
+		{
+			if (node->ltChild!=-1)
+			{
+				cusearchKdTreeGPU<<< 1, 1>>>(&kdNodes[node->ltChild], kdNodes, coords, query, numResults, dim, axis, pq, counter);
+			}
+		}
+    }
+}
+
+__global__ void temp(pair_coord_dist* pq, KdCoord* coords, sint* numResults, sint* dim) {
+	for(sint ind=0; ind<*numResults; ind++) {
+		for (sint i = 0; i < *dim; i++) {
+			printf("RESULTS  from device %d: %f \n", ind, coords[((pq[ind].tpl)*(*dim))+i]);
+		}
+	}
+}
+
+void Gpu::getSearchResultsGPU(pair_coord_dist** pqRefs, pair_coord_dist* pq, KdCoord* coordinates, const sint numResults,
+	const sint dim, KdCoord* results, sint numQuerys) {
+	
+	setDevice();
+	for(int q=0; q<numQuerys; q++) {
+		checkCudaErrors(cudaMemcpy(&pq[q*numResults], pqRefs[q], sizeof(pair_coord_dist)*numResults, cudaMemcpyDeviceToHost));
+	}
+
+	checkCudaErrors(cudaDeviceSynchronize());
+
+	for(sint ind=0; ind<numResults*numQuerys; ind++) {
+		
+		for (sint i = 0; i < dim; i++) {
+			results[(ind*dim)+i] = coordinates[((pq[ind].tpl)*dim)+i];
+		}
+	}
+}
+
+void Gpu::searchKdTreeGPU(refIdx_t root, const KdCoord* query, const sint numResults, const sint dim, pair_coord_dist**pqRefs, int q) {
+	setDevice();
+
+	//Declare variables pointers for device
+	KdCoord* d_query;
+	sint* d_numResults, *d_dim, *d_counter;
+	pair_coord_dist* d_pq;
+	sint counter = 0;
+
+	//Allocate memory and copy the values to the pointers
+	checkCudaErrors(cudaMalloc((void **) &d_query, sizeof(KdCoord)*dim)); 
+	checkCudaErrors(cudaMemcpy(d_query, query, sizeof(KdCoord)*dim, cudaMemcpyHostToDevice));
+	
+	checkCudaErrors(cudaMalloc((void **) &d_numResults, sizeof(sint))); 
+	checkCudaErrors(cudaMemcpy(d_numResults, &numResults, sizeof(sint), cudaMemcpyHostToDevice));
+	
+	checkCudaErrors(cudaMalloc((void **) &d_dim, sizeof(sint))); 
+	checkCudaErrors(cudaMemcpy(d_dim, &dim, sizeof(sint), cudaMemcpyHostToDevice));
+	
+	checkCudaErrors(cudaMalloc((void **) &d_pq, sizeof(pair_coord_dist)*numResults));
+	
+	checkCudaErrors(cudaMalloc((void **) &d_counter, sizeof(sint)));
+	checkCudaErrors(cudaMemcpy(d_counter, &counter, sizeof(sint), cudaMemcpyHostToDevice));
+	
+	cusearchKdTreeGPU<<< 1, 1>>>(d_kdNodes+root, d_kdNodes, d_coord, &d_query[0], d_numResults, d_dim, 0, d_pq, d_counter);
+	pqRefs[q] = d_pq;
+	//syncGPU();
+	checkCudaErrors(cudaDeviceSynchronize());
+	
+	//temp<<<1,1>>>(pqRefs[q], d_coord, d_numResults, d_dim);
+}
 
 
+void Gpu::searchKdTree(KdCoord* coordinates, refIdx_t root, const KdCoord* query, const sint numResults, 
+	const sint dim, KdCoord* results, sint numQuerys, pair_coord_dist** pqRefs) {
+
+#pragma acc parallel loop	
+	for(int q=0; q<numQuerys; q++) {
+		gpus[0]->searchKdTreeGPU(root, &query[q*dim], numResults, dim, pqRefs, q);
+	};
+}
+
+void Gpu::getSearchResults(pair_coord_dist** pqRefs, KdCoord* coordinates, const sint numResults,
+	const sint dim, KdCoord* results, sint numQuerys) {
+
+		pair_coord_dist pq[numResults*numQuerys];
+		gpus[0]->getSearchResultsGPU(pqRefs, pq, coordinates, numResults, dim, results, numQuerys);
+
+	}

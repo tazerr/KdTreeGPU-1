@@ -49,7 +49,7 @@ using namespace std;
 // Define a struct to hold coordinate index and corresponding distance
 struct pair_coord_dist {
 	double dist;
-	KdNode* pnt;
+	int32_t tpl;
 };
 
 class Gpu {
@@ -73,14 +73,16 @@ private:
 
 public:
 	// These are the API methods used outside the class.  They hide any details about the GPUs from the main program.
-	static sint     getNumGPUs() {return numGPUs;}
-	static void     gpuSetup(int gpu_max, int threads, int blocks, int dim); // GPU discovery and multiple GPU static variable setup.
-	static void     initializeKdNodesArray(KdCoord coordinates[], const sint numTuples, const sint dim);
-	static void     mergeSort(sint end[], const sint numTuples, const sint dim);
-	static refIdx_t buildKdTree(KdNode kdNodes[], const sint numTuples, const sint dim);
-	static sint     verifyKdTree(KdNode kdNodes[], const sint root, const sint dim, const sint numTuples);
-	static void     getKdTreeResults(KdNode kdNodes[], KdCoord coord[], const sint numTuples, const sint dim);
-	static void     seachKdTree(refIdx_t root, const KdCoord* query, const sint numResults, const sint dim, sint axis, pair_coord_dist* pq, sint counter);
+	static sint              getNumGPUs() {return numGPUs;}
+	static void     	     gpuSetup(int gpu_max, int threads, int blocks, int dim); // GPU discovery and multiple GPU static variable setup.
+	static void     		 initializeKdNodesArray(KdCoord coordinates[], const sint numTuples, const sint dim);
+	static void     		 mergeSort(sint end[], const sint numTuples, const sint dim);
+	static refIdx_t 		 buildKdTree(KdNode kdNodes[], const sint numTuples, const sint dim);
+	static sint     		 verifyKdTree(KdNode kdNodes[], const sint root, const sint dim, const sint numTuples);
+	static void     		 getKdTreeResults(KdNode kdNodes[], KdCoord coord[], const sint numTuples, const sint dim);
+	static void  searchKdTree(KdCoord* coordinates, refIdx_t root, const KdCoord* query, const sint numResults, const sint dim, KdCoord* results, sint numQuerys, pair_coord_dist** pqRefs);
+	static void     		 getSearchResults(pair_coord_dist** pqRefs, KdCoord* coordinates, const sint numResults, const sint dim, KdCoord* results, sint numQuerys);
+	//static void     searchKdTree(refIdx_t root, const KdCoord* query, const sint numResults, const sint dim, sint axis, pair_coord_dist* pq, sint counter);
 	static int      getNumThreads() {
 		if (numGPUs==2) {
 			if  (gpus[0] == NULL || gpus[1] == NULL) return 0;
@@ -303,6 +305,9 @@ private: // These are the methods specific verifyKdTree
 	void closeVerifyKdTree();
 	int  verifyKdTreeGPU(const sint root, const sint pstart, const sint dim, const sint numTuples);
 
+private: //Methods specifc to searchKdtree
+	void searchKdTreeGPU(refIdx_t root, const KdCoord* query, const sint numResults, const sint dim, pair_coord_dist**pqRefs, int q);
+	void getSearchResultsGPU(pair_coord_dist** pqRefs, pair_coord_dist* pq, KdCoord* coordinates, const sint numResults, const sint dim, KdCoord* results, sint numQuerys);
 };
 
 

@@ -268,8 +268,6 @@ KdNode* KdNode::createKdTree(KdNode kdNodes[], KdCoord coordinates[],  const sin
 			<< "  initTime = " << initTime << "  sortTime + removeDuplicatesTime = " << sortTime
 			<< "  kdTime = " << kdTime << "  verifyTime = " << verifyTime << endl << endl;
 
-	cout << "create tree ka root: " << root<< endl;
-	
 	// Return the pointer to the root of the k-d tree.
 	return &kdNodes[root];
 }
@@ -289,26 +287,34 @@ double euclideanDistance(KdNode* p1, const KdCoord* query, const KdCoord coords[
     return (dx*dx + dy*dy + dz*dz);
 }
 
-// Custom function that searched for numResults number of nearest neighbours instead of 
-// Searching them in a given radius
 /*
- *CUSTOM SEARCHKDTREE FUNCTION
- *CUSTOM SEARCHKDTREE FUNCTION
- *CUSTOM SEARCHKDTREE FUNCTION
- *CUSTOM SEARCHKDTREE FUNCTION
- *CUSTOM SEARCHKDTREE FUNCTION
-*/
+ * The csearchKdTree function is a resursive CPU based function which finds the nearest neighbours 
+ * of a query points and stores the results in a priority queu. It requires a loop later
+ * , after its call has been finished to write the obtained points to the results array that will be 
+ * sent to fortran
+ *
+ * calling parameters:
+ *
+ * node - a reference of the node of the kdtree which is stored in the kdNodes array
+ * kdNodes - pointer to the start of the array holding the KD Nodes. This array is copied from the GPU to CPU
+ * coords - pointer to the start of the array holding the coordinates. This array is on the CPU
+ * query - pointer to the array holding the query point
+ * numResults - number of nearest neighbour required
+ * dim - the number of dimensions
+ * i - variable to keep track of the depth/axis of comparison
+ * pq - pritority queue
+ *
+ * returns: a KdNode pointer to the root of the k-d tree
+ */
 void csearchKdTree(KdNode *node, KdNode kdNodes[], const KdCoord coords[], const KdCoord* query, const sint numResults,
 		const sint dim, sint i, priority_queue<pair<double, KdNode*>, vector<pair<double, KdNode*>>, QueueComparator> &pq) {
 
 	double curr_dist = euclideanDistance(node, query, coords, dim);
 
-	if (pq.size() < numResults) 
-	{
+	if (pq.size() < numResults) {
 		pq.push({curr_dist, node});
 	}
-	else if (curr_dist < pq.top().first) 
-	{
+	else if (curr_dist < pq.top().first) {
 		pq.pop();
         pq.push({curr_dist, node});
 	}
@@ -319,32 +325,25 @@ void csearchKdTree(KdNode *node, KdNode kdNodes[], const KdCoord coords[], const
 
 	i = (i+1) % 3;
 
-	if (pow(perp_,2)<pq.top().first){
+	if (pow(perp_,2)<pq.top().first) {
 
-		if (node->ltChild!=-1)
-		{
+		if (node->ltChild!=-1)	{
 			csearchKdTree(&kdNodes[node->ltChild], kdNodes, coords, query, numResults, dim, i, pq);
 		}
 		
-		if (node->gtChild!=-1)
-		{
+		if (node->gtChild!=-1)	{
 			csearchKdTree(&kdNodes[node->gtChild], kdNodes, coords, query, numResults, dim, i, pq);
 		}
     }
 
-	else 
-	{
-        if (perp_<0) 
-		{
-			if (node->gtChild!=-1)
-			{
+	else {
+        if (perp_<0) {
+			if (node->gtChild!=-1)	{
             	csearchKdTree(&kdNodes[node->gtChild], kdNodes, coords, query, numResults, dim, i, pq);
 			}	
         }
-        else 
-		{
-			if (node->ltChild!=-1)
-			{
+        else {
+			if (node->ltChild!=-1)	{
 				csearchKdTree(&kdNodes[node->ltChild], kdNodes, coords, query, numResults, dim, i, pq);
 			}
 		}
@@ -366,12 +365,6 @@ void csearchKdTree(KdNode *node, KdNode kdNodes[], const KdCoord coords[], const
  * dim - the number of dimensions
  * pq - array that will hold the results
  */
-void callsearchKdTree(refIdx_t root, const KdCoord* query, const sint numResults, const sint dim, 
-	sint axis, pair_coord_dist* pq, sint counter) {
-
-	Gpu::seachKdTree(root, query, numResults, dim, axis, pq, counter);
-
-}
 
 /*
  * Print one tuple.
@@ -411,22 +404,18 @@ void KdNode::printKdTree(KdNode kdNodes[], const KdCoord coords[], const sint di
 
 //Declaration for the custom function so that it can be called by fortran
 extern "C" {
-    void custom_funct(KdCoord* coordinates, sint numPoints, sint searchDistance, KdCoord* query, KdCoord* results, sint numResults);
+    void custom_funct(KdCoord* coordinates, sint numPoints, sint numQuerys, KdCoord* query, KdCoord* results, sint numResults);
 }
 
 /*
- * custom function
- * custom function mimicking the main function
- * custom function mimicking the main function
- * custom function mimicking the main function
- * custom function mimicking the main function
- * custom function mimicking the main function
- * custom function mimicking the main function
- * custom function mimicking the main function
- * custom function mimicking the main function
- * custom function mimicking the main function
+ * A custom function which acts as the main function 
+ * This is the function that is called by fortran
+ * calling parameters:
+ *
+ * 
+ * 
 */
-void custom_funct( KdCoord* coordinates, sint numPoints, sint searchDistance, KdCoord* query, KdCoord* results, sint numResults)
+void custom_funct( KdCoord* coordinates, sint numPoints, sint numQuerys, KdCoord* query, KdCoord* results, sint numResults)
 {
 	sint extraPoints = 100;
 	sint numDimensions = 3;
@@ -434,7 +423,7 @@ void custom_funct( KdCoord* coordinates, sint numPoints, sint searchDistance, Kd
 	sint numBlocks = 16;
 	sint maximumNumberOfNodesToPrint = 5;
 	
-	sint  i = maximumNumberOfNodesToPrint + numDimensions + extraPoints;
+	//sint  i = maximumNumberOfNodesToPrint + numDimensions + extraPoints;
 	
 	
 	//GPU
@@ -457,24 +446,34 @@ void custom_funct( KdCoord* coordinates, sint numPoints, sint searchDistance, Kd
 	//MAKE KDTREE
 	KdNode *root = KdNode::createKdTree(kdNodes, coordinates, numDimensions, numPoints);
 	
-	cout << "root ka place: " << (kdNodes-root) << endl;
 	cout << endl;
 
-	cout<<"KD TREE MADE "<<endl;
+	cout<<"KD TREE MADE and stored on GPU"<<endl;
 
+	// rootIdx stores the index of the root node on the kdnodes array
+	// this value is later passed to the searchKdTree function  
 	refIdx_t rootIdx = root-kdNodes;
 
-	pair_coord_dist* pq;
+	TIMER_DECLARATION()
 
-	callsearchKdTree(rootIdx, query, numResults, numDimensions, 0, pq, 0);
+	TIMER_START()
+	// SEARCH FOR Nearest Neighbour
+	pair_coord_dist* pqRefs[numQuerys];
+	Gpu::searchKdTree(coordinates, rootIdx, query, numResults, numDimensions, results, numQuerys, pqRefs);
+	TIMER_STOP(double searchTime);
+	
+	Gpu::getSearchResults(pqRefs, coordinates, numResults, numDimensions, results, numQuerys);
 
+	
+	cout << "Total Search Time = " << searchTime << endl;
 	/*
 	TIMER_DECLARATION();
 	
 	
 	// read the KdTree back from GPU
 	Gpu::getKdTreeResults( kdNodes,  coordinates, numPoints, numDimensions);
-	printf("host ke root ka cordi: %f", coordinates[kdNodes[root-kdNodes].tuple]);
+	//printf("host ke root ka cordi: %f", coordinates[kdNodes[root-kdNodes].tuple]);
+	
 #define VERIFY_ON_HOST
 #ifdef VERIFY_ON_HOST
 	sint numberOfNodes = root->verifyKdTree( kdNodes, coordinates, numDimensions, 0);
@@ -508,8 +507,8 @@ void custom_funct( KdCoord* coordinates, sint numPoints, sint searchDistance, Kd
         pq.pop();
 		it++;
     }
-
 	*/
+	
 		
 	/*
 	cout << endl << kdList.size() << " nodes within " << searchDistance << " units of ";
