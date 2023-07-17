@@ -1,21 +1,25 @@
-/usr/local/cuda-12.1/bin/nvcc -ccbin g++ -I/home/tazerr/Documents/Docs/KdTreeGPU/src/Common -m64  -Xcompiler -fopenmp -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=compute_50 -o obj/removeDups.o -c src/removeDups.cu
+/usr/local/cuda-12.1/bin/nvcc -ccbin g++ -I/home/tazerr/Documents/Docs/KdTreeGPU/src/Common -m64  -Xcompiler -fopenmp -rdc=true -gencode  arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=compute_50 -o obj/removeDups.o -c src/removeDups.cu
 
-/usr/local/cuda-12.1/bin/nvcc -ccbin g++ -I/home/tazerr/Documents/Docs/KdTreeGPU/src/Common -m64  -Xcompiler -fopenmp -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=compute_50 -o obj/KdTreeGPUsms.o -c src/KdTreeGPUsms.cu
+/usr/local/cuda-12.1/bin/nvcc -ccbin g++ -I/home/tazerr/Documents/Docs/KdTreeGPU/src/Common -m64  -Xcompiler -fopenmp -rdc=true -gencode  arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=compute_50 -o obj/KdTreeGPUsms.o -c src/KdTreeGPUsms.cu
 
-/usr/local/cuda-12.1/bin/nvcc -ccbin g++ -I/home/tazerr/Documents/Docs/KdTreeGPU/src/Common -m64  -Xcompiler -fopenmp -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=compute_50 -o obj/Gpu.o -c src/Gpu.cu
+/usr/local/cuda-12.1/bin/nvcc -ccbin g++ -I/home/tazerr/Documents/Docs/KdTreeGPU/src/Common -m64  -Xcompiler -fopenmp -rdc=true -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=compute_50 -o obj/Gpu.o -c src/Gpu.cu
 
-/usr/local/cuda-12.1/bin/nvcc -ccbin g++ -I/home/tazerr/Documents/Docs/KdTreeGPU/src/Common -m64  -Xcompiler -fopenmp -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=compute_50 -o obj/mergeSort.o -c src/mergeSort.cu
+/usr/local/cuda-12.1/bin/nvcc -ccbin g++ -I/home/tazerr/Documents/Docs/KdTreeGPU/src/Common -m64  -Xcompiler -fopenmp -rdc=true -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=compute_50 -o obj/mergeSort.o -c src/mergeSort.cu
 
-/usr/local/cuda-12.1/bin/nvcc -ccbin g++ -I/home/tazerr/Documents/Docs/KdTreeGPU/src/Common -m64  -Xcompiler -fopenmp -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=compute_50 -o obj/buildKdTree.o -c src/buildKdTree.cu
+/usr/local/cuda-12.1/bin/nvcc -ccbin g++ -I/home/tazerr/Documents/Docs/KdTreeGPU/src/Common -m64  -Xcompiler -fopenmp -rdc=true -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=compute_50 -o obj/buildKdTree.o -c src/buildKdTree.cu
 
 cd obj/
 
 gfortran -c -o kdTree0.o -fdefault-real-8 -fdefault-double-8 kdTree0.f90
 
-gfortran *.o -o program1 -L/usr/local/cuda-12.1/lib64 -lcudart -lstdc++ -lgomp
+nvcc *.o -o program1 -L/usr/local/cuda-12.1/lib64 -lgfortran -lcudart -lcudadevrt -lstdc++ -lgomp
 
 ./program1
 
 cd ..
 
 make clean
+
+pgf90
+-fopenacc
+openacc_lib.h
