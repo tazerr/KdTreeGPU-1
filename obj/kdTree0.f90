@@ -2,7 +2,8 @@ module call_kd_tree
     use iso_c_binding
     implicit none
     interface
-        subroutine custom_funct(coordinates, numPoints, numQuerys, query, results, numResults) bind(C, name="custom_funct")
+
+        subroutine custom_funct(coordinates, numPoints, numQuerys, query, results, numResults, rootIdx) bind(C, name="custom_funct")
             use iso_c_binding
             real(c_float), dimension(*) :: coordinates
             integer(c_int), value :: numPoints
@@ -10,7 +11,20 @@ module call_kd_tree
             real(c_float), dimension(*) :: query
 			real(c_float), dimension(*) :: results
 			integer(c_int), value :: numResults
+			integer(c_int), intent(inout) :: rootIdx
         end subroutine
+
+		subroutine search_funct(coordinates, numDimensions, numQuerys, query, results, numResults, rootIdx) bind(C, name="search_funct")
+            use iso_c_binding
+            real(c_float), dimension(*) :: coordinates
+            integer(c_int), value :: numDimensions
+            integer(c_int), value :: numQuerys
+            real(c_float), dimension(*) :: query
+			real(c_float), dimension(*) :: results
+			integer(c_int), value :: numResults
+			integer(c_int), value:: rootIdx
+        end subroutine
+
     end interface
 end module call_kd_tree
 
@@ -19,8 +33,8 @@ program mainn
 	use call_kd_tree
 	implicit none
 	
-  	integer(c_int) :: numPoints, numResults
-  	integer :: numDimension = 3
+  	integer(c_int) :: numPoints, numResults, rootIdx
+  	integer :: numDimensions = 3
   	integer :: sizeOfarray 
   	real(c_float), allocatable :: coordinates(:), results(:)
   	real(c_float), allocatable :: query(:)
@@ -108,15 +122,15 @@ program mainn
   	! Initialize the total number of points for the KDtree
   	numPoints = size(xgrid)
   	
-  	! integer, parameter :: numDimension = 3
-  	! integer, parameter :: sizeOfarray = numPoints*numDimension
-  	sizeOfarray = numPoints*numDimension
+  	! integer, parameter :: numDimensions = 3
+  	! integer, parameter :: sizeOfarray = numPoints*numDimensions
+  	sizeOfarray = numPoints*numDimensions
   	
   	! real(c_float), dimension(3) :: query
   	! Initialize the query point [x,y,z]
-	numQuerys=2
+	numQuerys=3
 	allocate(query(numQuerys*numResults))
-  	query = [0.0, 0.0, 0.0, 100.0, 100.0, 100.0]
+  	query = [0.0, 0.0, 0.0, 100.0, 100.0, 100.0, 15.0, 0.0, 1.0]
 
   	
   	! Build the coordinate array which the CUDA function is expecting {{x1,y1,z1},{x2,y2,z2}....}
@@ -129,10 +143,10 @@ program mainn
   				do i = 1, NI(nbl)
   				
   				! Get the current index
-                index = (nbl-1)*NI(nbl)*NJ(nbl)*NK(nbl)*numDimension + &
-        			(k-1)*NI(nbl)*NJ(nbl)*numDimension + &
-        			(j-1)*NI(nbl)*numDimension + &
-        			(i-1)*numDimension + 1
+                index = (nbl-1)*NI(nbl)*NJ(nbl)*NK(nbl)*numDimensions + &
+        			(k-1)*NI(nbl)*NJ(nbl)*numDimensions + &
+        			(j-1)*NI(nbl)*numDimensions + &
+        			(i-1)*numDimensions + 1
 
                 
                 !store in appropriate indices
@@ -149,9 +163,12 @@ program mainn
   	write(*,*) "Enter the number of points (integer) required:"
   	read(*,*) numResults
 
-	allocate(results(numResults*numDimension*numQuerys))
+	allocate(results(numResults*numDimensions*numQuerys))
   	
-  	call custom_funct(coordinates, numPoints, numQuerys, query, results, numResults)
+  	call custom_funct(coordinates, numPoints, numQuerys, query, results, numResults, rootIdx)
+	write(*, *) "ROOT: ", rootIdx
+
+	call search_funct(coordinates, numDimensions, numQuerys, query, results, numResults, rootIdx)
 
 	i=1
   	j=1
