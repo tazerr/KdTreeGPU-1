@@ -19,7 +19,3 @@ nvcc *.o -o program1 -L/usr/local/cuda-12.1/lib64 -lgfortran -lcudart -lcudadevr
 cd ..
 
 make clean
-
-pgf90
--fopenacc
-openacc_lib.h

@@ -2,11 +2,11 @@ module call_kd_tree
     use iso_c_binding
     implicit none
     interface
-        subroutine custom_funct(coordinates, numPoints, searchDistance, query, results, numResults) bind(C, name="custom_funct")
+        subroutine custom_funct(coordinates, numPoints, numQuerys, query, results, numResults) bind(C, name="custom_funct")
             use iso_c_binding
             real(c_float), dimension(*) :: coordinates
             integer(c_int), value :: numPoints
-            integer(c_int), value :: searchDistance
+            integer(c_int), value :: numQuerys
             real(c_float), dimension(*) :: query
 			real(c_float), dimension(*) :: results
 			integer(c_int), value :: numResults
@@ -18,21 +18,18 @@ program mainn
 
 	use call_kd_tree
 	implicit none
-	! integer :: nblocks, nbl, i, j, k, i1, i2, i3, i4, i5, index
-  	! integer, allocatable :: NI(:), NJ(:), NK(:)
-  	! real, allocatable :: xgrid(:,:,:,:), ygrid(:,:,:,:), zgrid(:,:,:,:)
-  	! character(50) :: filename = "grid.xyz"
+	
   	integer(c_int) :: numPoints, numResults
   	integer :: numDimension = 3
   	integer :: sizeOfarray 
   	real(c_float), allocatable :: coordinates(:), results(:)
-  	real(c_float), dimension(3) :: query
-  	integer(c_int) :: searchDistance
+  	real(c_float), allocatable :: query(:)
+  	integer(c_int) :: numQuerys
   	integer :: nblocks, nbl, i, j, k, index
   	integer, allocatable :: NI(:), NJ(:), NK(:)
   	real, allocatable :: xgrid(:,:,:,:), ygrid(:,:,:,:), zgrid(:,:,:,:)
   	character(100) :: filename="grid.xyz"
-	real :: lx, ly
+	real :: lx, ly, lz
 
   	! Open the file for reading
   	open(unit=1, file=trim(filename), form='unformatted', status='old', access='sequential')
@@ -49,12 +46,13 @@ program mainn
     	read(1) NI(nbl), NJ(nbl), NK(nbl)
   	end do
 
-	NI(1) = 32
+	NI(1) = 64
 	NJ(1) = 32
-	NK(1) = 1
+	NK(1) = 32
 
 	lx = 10.0
 	ly = 10.0
+	lz = 10.0
 
 	! Allocate arrays to store xgrid, ygrid, zgrid
   	allocate(xgrid(maxval(NI), maxval(NJ), maxval(NK), nblocks))
@@ -65,10 +63,10 @@ program mainn
 		do k=1,NK(nbl)
 			do j=1,NJ(nbl)
 				do i=1,NI(nbl)
-					xgrid(i,j,k,nbl) = ((j-1)*32+i)*22/7
+					xgrid(i,j,k,nbl) = i !((i)/(NI(nbl)-1.0)*lx)*100   !((j-1)*32.0+i + k*0.128)*22/7
 					!(i-1)/(NI(nbl)-1.0)*lx
-					ygrid(i,j,k,nbl) = (j-1)/(NJ(nbl)-1.0)*ly
-					zgrid(i,j,k,nbl) = 0.0
+					ygrid(i,j,k,nbl) = j !((j)/(NJ(nbl)-1.0)*ly)*100
+					zgrid(i,j,k,nbl) = k !((k)/(NK(nbl)-1.0)*lz)*100
 				end do
 			end do
 		end do
@@ -88,18 +86,18 @@ program mainn
   
 
   	! Print the values for verification
-  	do nbl = 1, nblocks
-    	write(*,*) "Block:", nbl
-    	do k = 1, NK(nbl)
-    	  do j = 1, NJ(nbl)
-    	    do i = 1, NI(nbl)
-    	      write(*,*) "xgrid(", i, j, k, nbl, ") =", xgrid(i, j, k, nbl)
-    	      write(*,*) "ygrid(", i, j, k, nbl, ") =", ygrid(i, j, k, nbl)
-    	      write(*,*) "zgrid(", i, j, k, nbl, ") =", zgrid(i, j, k, nbl)
-    	    end do
-    	  end do
-    	end do
-  	end do
+  	!do nbl = 1, nblocks
+    !	write(*,*) "Block:", nbl
+    !	do k = 1, NK(nbl)
+    !	  do j = 1, NJ(nbl)
+    !	    do i = 1, NI(nbl)
+    !	      write(*,*) "xgrid(", i, j, k, nbl, ") =", xgrid(i, j, k, nbl)
+    !	      write(*,*) "ygrid(", i, j, k, nbl, ") =", ygrid(i, j, k, nbl)
+    !	      write(*,*) "zgrid(", i, j, k, nbl, ") =", zgrid(i, j, k, nbl)
+    !	    end do
+    !	  end do
+    !	end do
+  	!end do
   
 	! TILL HERE THE GGRID FILE IS READ AND THE XYZ COORDINATES ARE
   	! STORED IN THERE RESPECTIVE ARRAYS
@@ -116,11 +114,10 @@ program mainn
   	
   	! real(c_float), dimension(3) :: query
   	! Initialize the query point [x,y,z]
-  	query = [0,0,0]
-  	
-  	! integer(c_int), value :: searchDistance
-  	! Initialize the value of the search distance from the queryPoints
-  	searchDistance = 2
+	numQuerys=2
+	allocate(query(numQuerys*numResults))
+  	query = [0.0, 0.0, 0.0, 100.0, 100.0, 100.0]
+
   	
   	! Build the coordinate array which the CUDA function is expecting {{x1,y1,z1},{x2,y2,z2}....}
   	! real(c_float), dimension(sizeOfarray) :: coordinates
@@ -147,28 +144,32 @@ program mainn
   			end do
   		end do
   	end do
-  	
-  	! i=1
-  	! j=1
-  	
-  	! do while (i<=size(coordinates))
-    !	write(*, *) "X (", j, ") : ", coordinates(i)
-    !	write(*, *) "Y (", j, ") : ", coordinates(i+1)
-    !	write(*, *) "Z (", j, ") : ", coordinates(i+2)
-    !	j=j+1
-    !	i=i+3
-  	! end do
 
 	! Prompt the user to enter the number of points closest points required
   	write(*,*) "Enter the number of points (integer) required:"
   	read(*,*) numResults
 
-	allocate(results(numResults*numDimension))
+	allocate(results(numResults*numDimension*numQuerys))
   	
-  	call custom_funct(coordinates, numPoints, searchDistance, query, results, numResults)
+  	call custom_funct(coordinates, numPoints, numQuerys, query, results, numResults)
+
+	i=1
+  	j=1
+  	
+	write(*,*) "Closest points points found are as follows : "
+  	do while (i<=size(results))
+    	write(*, *) "X (", j, ") : ", results(i)
+    	write(*, *) "Y (", j, ") : ", results(i+1)
+    	write(*, *) "Z (", j, ") : ", results(i+2)
+    	j=j+1
+    	i=i+3
+  	end do
+
   	
   	! Deallocate arrays
   	deallocate(NI, NJ, NK)
   	deallocate(xgrid, ygrid, zgrid)
   	deallocate(coordinates)
+	deallocate(results)
+	deallocate(query)
 end program mainn
