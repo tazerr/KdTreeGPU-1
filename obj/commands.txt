@@ -10,7 +10,7 @@
 
 cd obj/
 
-gfortran -c -o kdTree0.o -fdefault-real-8 -fdefault-double-8 kdTree0.f90
+gfortran -c -o kdTreeInterp.o -fdefault-real-8 -fdefault-double-8 kdTreeInterp.f90
 
 nvcc *.o -o program1 -L/usr/local/cuda-12.1/lib64 -lgfortran -lcudart -lcudadevrt -lstdc++ -lgomp
 
