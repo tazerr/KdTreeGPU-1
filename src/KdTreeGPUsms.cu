@@ -558,7 +558,7 @@ void custom_funct( KdCoord* coordinates, sint numPoints, sint numQuerys, KdCoord
 
 //Declaration for the custom function so that it can be called by fortran
 extern "C" {
-    void search_funct(KdCoord* coordinates, sint numPoints, sint numQuerys, KdCoord* query, KdCoord* results, sint numResults, sint rootIdx);
+    void search_funct(KdCoord* coordinates, sint numPoints, sint numQuerys, KdCoord* query, KdCoord* results, sint numResults, sint rootIdx, float mltip);
 }
 
 /*
@@ -569,7 +569,7 @@ extern "C" {
  * 
  * 
 */
-void search_funct( KdCoord* coordinates, sint numDimensions, sint numQuerys, KdCoord* query, KdCoord* results, sint numResults, sint rootIdx)
+void search_funct( KdCoord* coordinates, sint numDimensions, sint numQuerys, KdCoord* query, KdCoord* results, sint numResults, sint rootIdx, float mltip)
 {
 	// rootIdx stores the index of the root node on the kdnodes array
 	// this value is later passed to the searchKdTree function  
@@ -580,10 +580,10 @@ void search_funct( KdCoord* coordinates, sint numDimensions, sint numQuerys, KdC
 	TIMER_START()
 	// SEARCH FOR Nearest Neighbour
 	pair_coord_dist* pqRefs[numQuerys];
-	Gpu::searchKdTree(coordinates, rootIdx, query, numResults, numDimensions, results, numQuerys, pqRefs);
+	Gpu::searchKdTree(coordinates, rootIdx, query, numResults, numDimensions, results, numQuerys, pqRefs, mltip);
 	TIMER_STOP(double searchTime);
 	
-	Gpu::getSearchResults(pqRefs, coordinates, numResults, numDimensions, results, numQuerys);
+	Gpu::getSearchResults(pqRefs, coordinates, numResults, numDimensions, results, numQuerys, mltip);
 
 	
 	cout << "Total Search Time = " << searchTime << endl;

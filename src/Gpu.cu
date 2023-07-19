@@ -1194,19 +1194,17 @@ void Gpu::gpuSetup(int gpu_max, int threads, int blocks, int dim){
  * and the result array will also be stored on GPU 
  */
 __global__ void cusearchKdTreeGPU(KdNode *node, KdNode kdNodes[], const KdCoord coords[], const KdCoord* query, const sint* numResults,
-		const sint* dim, sint axis, pair_coord_dist* pq, sint* counter) {
+		const sint* dim, sint axis, pair_coord_dist* pq, sint* counter, float* mltip) {
 
 	pair_coord_dist nd_pair;
 	nd_pair.tpl = node->tuple;
 
 	//distCalc<<< 1, 1>>>(&nd_pair, query, coords, dim);
-	double dx = coords[(nd_pair.tpl)*(*dim) + 0] - query[0];
-    double dy = coords[(nd_pair.tpl)*(*dim) + 1] - query[1];
-    double dz = coords[(nd_pair.tpl)*(*dim) + 2] - query[2];
+	double dx = coords[(nd_pair.tpl)*(*dim) + 0]/(*mltip) - query[0];
+    double dy = coords[(nd_pair.tpl)*(*dim) + 1]/(*mltip) - query[1];
+    double dz = coords[(nd_pair.tpl)*(*dim) + 2]/(*mltip) - query[2];
 
 	nd_pair.dist = (dx*dx + dy*dy + dz*dz);
-
-	double curr_dist = nd_pair.dist;
 
 	//insertSort<<< 1, 1>>>(pq, numResults);
 	if (*counter<(*numResults)) {
@@ -1224,7 +1222,7 @@ __global__ void cusearchKdTreeGPU(KdNode *node, KdNode kdNodes[], const KdCoord 
 			pq[j+1] = key;
 		}
 	}
-	else if (curr_dist < pq[(*numResults)-1].dist) {
+	else if (nd_pair.dist < pq[(*numResults)-1].dist) {
 		pq[(*numResults)-1] = nd_pair;
 		for (int i=1; i<(*numResults); i++) {
 			pair_coord_dist key = pq[i];
@@ -1239,7 +1237,7 @@ __global__ void cusearchKdTreeGPU(KdNode *node, KdNode kdNodes[], const KdCoord 
 		}
 	}
 
-	double perp_ = coords[node->tuple*(*dim) + axis] - query[axis];
+	double perp_ = coords[node->tuple*(*dim) + axis]/(*mltip) - query[axis];
 
 	axis = (axis+1) % 3;
 
@@ -1247,12 +1245,12 @@ __global__ void cusearchKdTreeGPU(KdNode *node, KdNode kdNodes[], const KdCoord 
 
 		if (node->ltChild!=-1)
 		{
-			cusearchKdTreeGPU<<< 1, 1>>>(&kdNodes[node->ltChild], kdNodes, coords, query, numResults, dim, axis, pq, counter);
+			cusearchKdTreeGPU<<< 1, 1>>>(&kdNodes[node->ltChild], kdNodes, coords, query, numResults, dim, axis, pq, counter, mltip);
 		}
 		
 		if (node->gtChild!=-1)
 		{
-			cusearchKdTreeGPU<<< 1, 1>>>(&kdNodes[node->gtChild], kdNodes, coords, query, numResults, dim, axis, pq, counter);
+			cusearchKdTreeGPU<<< 1, 1>>>(&kdNodes[node->gtChild], kdNodes, coords, query, numResults, dim, axis, pq, counter, mltip);
 		}
     }
 
@@ -1262,14 +1260,14 @@ __global__ void cusearchKdTreeGPU(KdNode *node, KdNode kdNodes[], const KdCoord 
 		{
 			if (node->gtChild!=-1)
 			{
-				cusearchKdTreeGPU<<< 1, 1>>>(&kdNodes[node->gtChild], kdNodes, coords, query, numResults, dim, axis, pq, counter);
+				cusearchKdTreeGPU<<< 1, 1>>>(&kdNodes[node->gtChild], kdNodes, coords, query, numResults, dim, axis, pq, counter, mltip);
 			}	
         }
         else 
 		{
 			if (node->ltChild!=-1)
 			{
-				cusearchKdTreeGPU<<< 1, 1>>>(&kdNodes[node->ltChild], kdNodes, coords, query, numResults, dim, axis, pq, counter);
+				cusearchKdTreeGPU<<< 1, 1>>>(&kdNodes[node->ltChild], kdNodes, coords, query, numResults, dim, axis, pq, counter, mltip);
 			}
 		}
     }
@@ -1284,7 +1282,7 @@ __global__ void temp(pair_coord_dist* pq, KdCoord* coords, sint* numResults, sin
 }
 
 void Gpu::getSearchResultsGPU(pair_coord_dist** pqRefs, pair_coord_dist* pq, KdCoord* coordinates, const sint numResults,
-	const sint dim, KdCoord* results, sint numQuerys) {
+	const sint dim, KdCoord* results, sint numQuerys, float mltip) {
 	
 	setDevice();
 	for(int q=0; q<numQuerys; q++) {
@@ -1296,21 +1294,25 @@ void Gpu::getSearchResultsGPU(pair_coord_dist** pqRefs, pair_coord_dist* pq, KdC
 	for(sint ind=0; ind<numResults*numQuerys; ind++) {
 		
 		for (sint i = 0; i < dim; i++) {
-			results[(ind*dim)+i] = coordinates[((pq[ind].tpl)*dim)+i];
+			results[(ind*dim)+i] = coordinates[((pq[ind].tpl)*dim)+i]/mltip;
 		}
 	}
 }
 
-void Gpu::searchKdTreeGPU(refIdx_t root, const KdCoord* query, const sint numResults, const sint dim, pair_coord_dist**pqRefs, int q) {
+void Gpu::searchKdTreeGPU(refIdx_t root, const KdCoord* query, const sint numResults, const sint dim, pair_coord_dist**pqRefs, int q, float mltip) {
 	setDevice();
 
 	//Declare variables pointers for device
+	float* d_mltip;
 	KdCoord* d_query;
 	sint* d_numResults, *d_dim, *d_counter;
 	pair_coord_dist* d_pq;
 	sint counter = 0;
 
 	//Allocate memory and copy the values to the pointers
+	checkCudaErrors(cudaMalloc((void **) &d_mltip, sizeof(float))); 
+	checkCudaErrors(cudaMemcpy(d_mltip, &mltip, sizeof(float), cudaMemcpyHostToDevice));
+
 	checkCudaErrors(cudaMalloc((void **) &d_query, sizeof(KdCoord)*dim)); 
 	checkCudaErrors(cudaMemcpy(d_query, query, sizeof(KdCoord)*dim, cudaMemcpyHostToDevice));
 	
@@ -1325,7 +1327,7 @@ void Gpu::searchKdTreeGPU(refIdx_t root, const KdCoord* query, const sint numRes
 	checkCudaErrors(cudaMalloc((void **) &d_counter, sizeof(sint)));
 	checkCudaErrors(cudaMemcpy(d_counter, &counter, sizeof(sint), cudaMemcpyHostToDevice));
 	
-	cusearchKdTreeGPU<<< 1, 1>>>(d_kdNodes+root, d_kdNodes, d_coord, &d_query[0], d_numResults, d_dim, 0, d_pq, d_counter);
+	cusearchKdTreeGPU<<< 1, 1>>>(d_kdNodes+root, d_kdNodes, d_coord, &d_query[0], d_numResults, d_dim, 0, d_pq, d_counter, d_mltip);
 	pqRefs[q] = d_pq;
 	//syncGPU();
 	checkCudaErrors(cudaDeviceSynchronize());
@@ -1335,18 +1337,18 @@ void Gpu::searchKdTreeGPU(refIdx_t root, const KdCoord* query, const sint numRes
 
 
 void Gpu::searchKdTree(KdCoord* coordinates, refIdx_t root, const KdCoord* query, const sint numResults, 
-	const sint dim, KdCoord* results, sint numQuerys, pair_coord_dist** pqRefs) {
+	const sint dim, KdCoord* results, sint numQuerys, pair_coord_dist** pqRefs, float mltip) {
 
 #pragma acc parallel loop	
 	for(int q=0; q<numQuerys; q++) {
-		gpus[0]->searchKdTreeGPU(root, &query[q*dim], numResults, dim, pqRefs, q);
+		gpus[0]->searchKdTreeGPU(root, &query[q*dim], numResults, dim, pqRefs, q, mltip);
 	};
 }
 
 void Gpu::getSearchResults(pair_coord_dist** pqRefs, KdCoord* coordinates, const sint numResults,
-	const sint dim, KdCoord* results, sint numQuerys) {
+	const sint dim, KdCoord* results, sint numQuerys, float mltip) {
 
 		pair_coord_dist pq[numResults*numQuerys];
-		gpus[0]->getSearchResultsGPU(pqRefs, pq, coordinates, numResults, dim, results, numQuerys);
+		gpus[0]->getSearchResultsGPU(pqRefs, pq, coordinates, numResults, dim, results, numQuerys, mltip);
 
 	}
