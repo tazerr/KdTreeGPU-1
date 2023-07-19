@@ -222,7 +222,8 @@ run: build
 	$(EXEC) ./kdTreeGPUsms
 
 clean:
-	rm -f obj/removeDups.o obj/KdTreeGPUsms.o obj/Gpu.o obj/mergeSort.o obj/buildKdTree.o obj/kdTree0.o obj/kdTreeInterp.o obj/program1 obj/call_kd_tree.mod kdTreeGPUsms 
+	rm -f obj/*.o  obj/program1 obj/*.mod kdTreeGPUsms
+#  rm -f obj/removeDups.o obj/KdTreeGPUsms.o obj/Gpu.o obj/mergeSort.o obj/buildKdTree.o obj/kdTree0.o obj/kdTreeInterp.o obj/program1 obj/call_kd_tree.mod kdTreeGPUsms  
 #	rm -rf ../../bin/$(OS_ARCH)/$(OSLOWER)/$(TARGET)$(if $(abi),/$(abi))/mergeSort
 
 clobber: clean
