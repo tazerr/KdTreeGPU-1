@@ -81,8 +81,8 @@ public:
 	static sint     verifyKdTree(KdNode kdNodes[], const sint root, const sint dim, const sint numTuples);
 	static void     getKdTreeResults(KdNode kdNodes[], KdCoord coord[], const sint numTuples, const sint dim);
 	static void  	searchKdTree(KdCoord* coordinates, refIdx_t root, const KdCoord* query, const sint numResults, const sint dim, KdCoord* results, sint numQuerys, pair_coord_dist** pqRefs, float mltip);
-	static void  	getSearchResults(pair_coord_dist** pqRefs, KdCoord* coordinates, const sint numResults, const sint dim, KdCoord* results, sint numQuerys, float mltip);
-	//static void     searchKdTree(refIdx_t root, const KdCoord* query, const sint numResults, const sint dim, sint axis, pair_coord_dist* pq, sint counter);
+	static void  	getSearchResults(pair_coord_dist** pqRefs, KdCoord* coordinates, const sint numResults, const sint dim, 
+					KdCoord* results, sint numQuerys, float mltip, sint* gindices, double* dists);
 	static int      getNumThreads() {
 		if (numGPUs==2) {
 			if  (gpus[0] == NULL || gpus[1] == NULL) return 0;
@@ -307,7 +307,8 @@ private: // These are the methods specific verifyKdTree
 
 private: //Methods specifc to searchKdtree
 	void searchKdTreeGPU(refIdx_t root, const KdCoord* query, const sint numResults, const sint dim, pair_coord_dist**pqRefs, int q, float mltip);
-	void getSearchResultsGPU(pair_coord_dist** pqRefs, pair_coord_dist* pq, KdCoord* coordinates, const sint numResults, const sint dim, KdCoord* results, sint numQuerys, float mltip);
+	void getSearchResultsGPU(pair_coord_dist** pqRefs, pair_coord_dist* pq, KdCoord* coordinates, const sint numResults, const sint dim, 
+		KdCoord* results, sint numQuerys, float mltip, sint* gindices, double* dists);
 };
 
 

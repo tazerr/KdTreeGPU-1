@@ -283,7 +283,7 @@ ALLOCATE (jstencil(interptsy))
 !$acc data copyin (istencil, jstencil, xstencil, ystencil, zstencil)
 
 	DO nbl = 1,nblocksnew
-!$acc parallel loop collapse(3) !!!private(istencil,jstencil,xstencil,ystencil,zstencil)
+!$acc parallel loop collapse(3) private(istencil,jstencil,xstencil,ystencil,zstencil)
     DO k = 1, NKnew(nbl)
     DO j = 1, NJnew(nbl)
     DO i = 1, NInew(nbl)
@@ -294,10 +294,16 @@ ALLOCATE (jstencil(interptsy))
 
         !CALL search_funct(coordinates, numDimensions, numQuerys, query, results &
         !    , numResults, rootIdx, mltip, gindices, dists)
+
+        ! Get the current index
+        index = (nbl-1)*NInew(nbl)*NJnew(nbl)*NKnew(nbl)+ &
+            (k-1)*NInew(nbl)*NJnew(nbl)+ &
+            (j-1)*NInew(nbl)+ &
+            (i-1) + 1
             
         DO indexing = 1,numResults
-			convertindex = gindices(indexing)
-			dw = (dists(indexing))**0.5
+			convertindex = gindices((index-1)*numResults+indexing)
+			dw = (dists((index-1)*numResults+indexing))**0.5
 			call get_loc_index(convertindex,loc_blk, loc_i, loc_j, loc_k)
             DO indx = 1,interptsx
 				istencil(indx) = Igrid(loc_i + indx - interplace, loc_j, loc_k,loc_blk)
@@ -310,16 +316,16 @@ ALLOCATE (jstencil(interptsy))
 			END DO
             iinter = Igrid(loc_i, loc_j, loc_k,loc_blk)
 			jinter = Jgrid(loc_i, loc_j, loc_k,loc_blk)
-!            print*, zstencil
-			call Coord_Interpolation(interptsx,interptsy,xstencil,ystencil,zstencil,istencil,jstencil,query(1),query(2),query(3) &
-                ,iinter,jinter)
+            print*, zstencil
+			call Coord_Interpolation(interptsx,interptsy,xstencil,ystencil,zstencil,istencil,jstencil &
+                ,query((index-1)*numDimensions+1),query((index-1)*numDimensions+2),query((index-1)*numDimensions+3),iinter,jinter)
 			Igridnew(i,j,k,nbl) = iinter
 			Jgridnew(i,j,k,nbl) = jinter
         
-!			write(*,*), istencil
-!			write(*,*), jstencil
-!			write(*,*), iinter, jinter
-!			pause
+			print*, istencil
+			print*, jstencil
+			print*, iinter, jinter
+			pause
         END DO
     END DO
 	END DO

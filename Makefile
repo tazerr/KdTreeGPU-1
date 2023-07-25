@@ -34,6 +34,9 @@
 ################################################################################
 
 # Location of the CUDA Toolkit
+
+#############CHANGE PATH TO YOUR PATH##############################
+#############CHANGE PATH TO YOUR PATH##############################
 CUDA_PATH       ?= /usr/local/cuda-12.1
 
 OSUPPER = $(shell uname -s 2>/dev/null | tr "[:lower:]" "[:upper:]")
@@ -144,8 +147,13 @@ ALL_LDFLAGS += $(addprefix -Xlinker ,$(LDFLAGS))
 ALL_LDFLAGS += $(addprefix -Xlinker ,$(EXTRA_LDFLAGS))
 
 # Common includes and paths for CUDA
+#############CHANGE PATH TO YOUR PATH##############################
 INCLUDES  := -I/home/tazerr/Documents/Docs/KdTreeGPU/src/Common
 LIBRARIES :=
+
+# Fortran compiler setting
+FC := gfortran
+FCFLAGS := -fdefault-real-8 -fdefault-double-8
 
 ################################################################################
 
@@ -153,9 +161,11 @@ SAMPLE_ENABLED := 1
 
 # Gencode arguments
 ifeq ($(OS_ARCH),armv7l)
-SMS ?= 20 30 32 35 37 50
+#SMS ?= 20 30 32 35 37 50
+SMS?= 50 52 60
 else
-SMS ?= 30 35 37 50
+#SMS ?= 30 35 37 50
+SMS?= 50 52
 endif
 
 ifeq ($(SMS),)
@@ -165,20 +175,20 @@ endif
 
 ifeq ($(GENCODE_FLAGS),)
 # Generate SASS code for each SM architecture listed in $(SMS)
-#$(foreach sm,$(SMS),$(eval GENCODE_FLAGS += -gencode arch=compute_$(sm),code=sm_$(sm)))
-$(foreach sm,$(SMS),$(eval GENCODE_FLAGS += -gencode arch=compute_50,code=sm_50))
+$(foreach sm,$(SMS),$(eval GENCODE_FLAGS += -gencode arch=compute_$(sm),code=sm_$(sm)))
+#$(foreach sm,$(SMS),$(eval GENCODE_FLAGS += -gencode arch=compute_52,code=sm_52))
 
 # Generate PTX code from the highest SM architecture in $(SMS) to guarantee forward-compatibility
 HIGHEST_SM := $(lastword $(sort $(SMS)))
 ifneq ($(HIGHEST_SM),)
-#GENCODE_FLAGS += -gencode arch=compute_$(HIGHEST_SM),code=compute_$(HIGHEST_SM)
-GENCODE_FLAGS += -gencode arch=compute_50,code=compute_50
+GENCODE_FLAGS += -gencode arch=compute_$(HIGHEST_SM),code=compute_$(HIGHEST_SM)
+#GENCODE_FLAGS += -gencode arch=compute_60,code=compute_60
 endif
 endif
 
-ALL_CCFLAGS += -Xcompiler -fopenmp
+ALL_CCFLAGS += -Xcompiler -fopenmp -rdc=true
 
-LIBRARIES += -lgomp
+LIBRARIES += -lgfortran -lcudart -lcudadevrt -lstdc++ -lgomp -acc
 
 ifeq ($(SAMPLE_ENABLED),0)
 EXEC ?= @echo "[@]"
@@ -189,7 +199,7 @@ endif
 # Target rules
 all: build
 
-build: kdTreeGPUsms
+build: obj/KdTreeGPUsms.o
 
 check.deps:
 ifeq ($(SAMPLE_ENABLED),0)
@@ -204,7 +214,7 @@ obj/buildKdTree.o:src/buildKdTree.cu src/buildKdTree_common.h
 obj/Gpu.o:src/Gpu.cu src/buildKdTree_common.h src/Gpu.h src/mergeSort_common.h src/KdNode.h src/removeDups_common.h
 	$(EXEC) $(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c $<
 
-obj/KdTreeGPUsms.o:src/KdTreeGPUsms.cu src/buildKdTree_common.h src/Gpu.h src/mergeSort_common.h src/KdNode.h src/removeDups_common.h
+obj/KdTreeGPUsms.o:src/KdTreeGPUsms.cu src/buildKdTree_common.h src/Gpu.h src/mergeSort_common.h src/KdNode.h src/removeDups_common.h obj/removeDups.o obj/Gpu.o obj/mergeSort.o obj/buildKdTree.o
 	$(EXEC) $(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c $<
 
 obj/mergeSort.o:src/mergeSort.cu src/mergeSort_common.h src/KdNode.h
@@ -213,16 +223,26 @@ obj/mergeSort.o:src/mergeSort.cu src/mergeSort_common.h src/KdNode.h
 obj/removeDups.o:src/removeDups.cu src/removeDups_common.h
 	$(EXEC) $(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c $<
 
-kdTreeGPUsms: obj/removeDups.o obj/KdTreeGPUsms.o obj/Gpu.o obj/mergeSort.o obj/buildKdTree.o
-	$(EXEC) $(NVCC) $(ALL_LDFLAGS) $(GENCODE_FLAGS) -o $@ $+ $(LIBRARIES)
+#obj/kdTreeInterp.o:obj/kdTreeInterp.f90
+#	$(EXEC) $(FC) $(FCFLAGS) -o $@ -c $<
+
+#program1:obj/kdTreeInterp.o obj/removeDups.o obj/KdTreeGPUsms.o obj/Gpu.o obj/mergeSort.o obj/buildKdTree.o
+#	$(EXEC) $(NVCC) -o $@ $+ $(LIBRARIES)
+
+#program1:obj/kdTreeInterp.o obj/removeDups.o obj/KdTreeGPUsms.o obj/Gpu.o obj/mergeSort.o obj/buildKdTree.o 
+#  $(EXEC) $(NVCC) -o $@ $+ $(LIBRARIES)
+#kdTreeGPUsms: obj/removeDups.o obj/KdTreeGPUsms.o obj/Gpu.o obj/mergeSort.o obj/buildKdTree.o
+#	$(EXEC) $(NVCC) $(ALL_LDFLAGS) $(GENCODE_FLAGS) -o $@ $+ $(LIBRARIES)
+
+
 #	$(EXEC) mkdir -p ../../bin/$(OS_ARCH)/$(OSLOWER)/$(TARGET)$(if $(abi),/$(abi))
 #	$(EXEC) cp $@ ../../bin/$(OS_ARCH)/$(OSLOWER)/$(TARGET)$(if $(abi),/$(abi))
 
 run: build
-	$(EXEC) ./kdTreeGPUsms
+	$(EXEC) ./obj/*.o
 
 clean:
-	rm -f obj/*.o  obj/program1 obj/*.mod kdTreeGPUsms
+	rm -f obj/*.o  program1 *.mod obj/*.mod 
 #  rm -f obj/removeDups.o obj/KdTreeGPUsms.o obj/Gpu.o obj/mergeSort.o obj/buildKdTree.o obj/kdTree0.o obj/kdTreeInterp.o obj/program1 obj/call_kd_tree.mod kdTreeGPUsms  
 #	rm -rf ../../bin/$(OS_ARCH)/$(OSLOWER)/$(TARGET)$(if $(abi),/$(abi))/mergeSort
 

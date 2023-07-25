@@ -173,8 +173,8 @@ void Gpu::initializeKdNodesArrayGPU(const KdCoord coordinates[], const sint numT
 		setDevice();
 		// First allocate memory for the coordinate array and copy it to the device
 		if (d_coord == NULL) {
-			checkCudaErrors(cudaMalloc((void **) &d_coord, (numTuples+1)*sizeof(int)*dim)); // Allocate an extra for max coord
-			checkCudaErrors(cudaMemcpyAsync(d_coord, coordinates, numTuples*sizeof(int)*dim, cudaMemcpyHostToDevice, stream));
+			checkCudaErrors(cudaMalloc((void **) &d_coord, (numTuples+1)*sizeof(KdCoord)*dim)); // Allocate an extra for max coord
+			checkCudaErrors(cudaMemcpyAsync(d_coord, coordinates, numTuples*sizeof(KdCoord)*dim, cudaMemcpyHostToDevice, stream));
 		} else if (d_coord != NULL) {
 			cout << "initializeKdNodesArrayGPU Error: coordinate array already allocated" << endl;
 			exit(1);
@@ -667,7 +667,7 @@ refIdx_t Gpu::buildKdTreeGPU(const sint numTuples, const int startP, const sint 
 			}
 	}
 	if (d_references[dim] == NULL) {  // If the last array in not there create it
-		checkCudaErrors(cudaMalloc((void **) &d_references[dim], (numTuples)*sizeof(int)));
+		checkCudaErrors(cudaMalloc((void **) &d_references[dim], (numTuples)*sizeof(refIdx_t)));
 	}
 
 	const sint tuplesDepth = int(floor(log2(float(numTuples))));
@@ -1281,7 +1281,7 @@ __global__ void temp(pair_coord_dist* pq, KdCoord* coords, sint* numResults, sin
 }
 
 void Gpu::getSearchResultsGPU(pair_coord_dist** pqRefs, pair_coord_dist* pq, KdCoord* coordinates, const sint numResults,
-	const sint dim, KdCoord* results, sint numQuerys, float mltip) {
+	const sint dim, KdCoord* results, sint numQuerys, float mltip, sint* gindices, double* dists) {
 	
 	setDevice();
 	for(int q=0; q<numQuerys; q++) {
@@ -1295,6 +1295,9 @@ void Gpu::getSearchResultsGPU(pair_coord_dist** pqRefs, pair_coord_dist* pq, KdC
 		for (sint i = 0; i < dim; i++) {
 			results[(ind*dim)+i] = coordinates[((pq[ind].tpl)*dim)+i]/mltip;
 		}
+
+		gindices[ind] = pq[ind].tpl;
+		dists[ind] = pow(pq[ind].dist,0.5);
 	}
 }
 
@@ -1338,15 +1341,16 @@ void Gpu::searchKdTreeGPU(refIdx_t root, const KdCoord* query, const sint numRes
 void Gpu::searchKdTree(KdCoord* coordinates, refIdx_t root, const KdCoord* query, const sint numResults, 
 	const sint dim, KdCoord* results, sint numQuerys, pair_coord_dist** pqRefs, float mltip) {
 
+//#pragma acc parallel loop	
 	for(int q=0; q<numQuerys; q++) {
 		gpus[0]->searchKdTreeGPU(root, &query[q*dim], numResults, dim, pqRefs, q, mltip);
 	};
 }
 
 void Gpu::getSearchResults(pair_coord_dist** pqRefs, KdCoord* coordinates, const sint numResults,
-	const sint dim, KdCoord* results, sint numQuerys, float mltip) {
+	const sint dim, KdCoord* results, sint numQuerys, float mltip, sint* gindices, double* dists) {
 
 		pair_coord_dist pq[numResults*numQuerys];
-		gpus[0]->getSearchResultsGPU(pqRefs, pq, coordinates, numResults, dim, results, numQuerys, mltip);
+		gpus[0]->getSearchResultsGPU(pqRefs, pq, coordinates, numResults, dim, results, numQuerys, mltip, gindices, dists);
 
 	}
