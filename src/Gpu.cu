@@ -42,7 +42,6 @@
 #include <limits>
 #include <cuda_runtime.h>
 #include <omp.h>
-#include <openacc.h>
 
 // includes, project
 #include <helper_cuda.h>
@@ -1339,7 +1338,6 @@ void Gpu::searchKdTreeGPU(refIdx_t root, const KdCoord* query, const sint numRes
 void Gpu::searchKdTree(KdCoord* coordinates, refIdx_t root, const KdCoord* query, const sint numResults, 
 	const sint dim, KdCoord* results, sint numQuerys, pair_coord_dist** pqRefs, float mltip) {
 
-#pragma acc parallel loop	
 	for(int q=0; q<numQuerys; q++) {
 		gpus[0]->searchKdTreeGPU(root, &query[q*dim], numResults, dim, pqRefs, q, mltip);
 	};

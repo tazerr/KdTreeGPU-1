@@ -574,7 +574,6 @@ void search_funct( KdCoord* coordinates, sint numDimensions, sint numQuerys, KdC
 	// rootIdx stores the index of the root node on the kdnodes array
 	// this value is later passed to the searchKdTree function  
 
-	cout << "root in search_funct: "<< rootIdx << endl;
 	TIMER_DECLARATION()
 
 	TIMER_START()
@@ -582,9 +581,10 @@ void search_funct( KdCoord* coordinates, sint numDimensions, sint numQuerys, KdC
 	pair_coord_dist* pqRefs[numQuerys];
 	Gpu::searchKdTree(coordinates, rootIdx, query, numResults, numDimensions, results, numQuerys, pqRefs, mltip);
 	TIMER_STOP(double searchTime);
-	
+	cout << "Total Search Time = " << searchTime << endl;
+
 	Gpu::getSearchResults(pqRefs, coordinates, numResults, numDimensions, results, numQuerys, mltip);
 
 	
-	cout << "Total Search Time = " << searchTime << endl;
+	
 }
