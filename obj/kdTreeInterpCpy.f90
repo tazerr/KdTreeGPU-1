@@ -17,8 +17,6 @@ MODULE call_kd_tree
 
 		SUBROUTINE search_funct(coordinates, numDimensions, numQuerys, query, results, numResults, rootIdx &
             , mltip, gindices, dists) bind(C, name="search_funct")
-
-            !@@$acc routine seq
             USE iso_c_binding
             REAL(c_float), dimension(*) :: coordinates
             INTEGER(c_int), value :: numDimensions
@@ -37,6 +35,7 @@ END MODULE call_kd_tree
 MODULE arrs
     INTEGER,ALLOCATABLE :: NI(:), NJ(:), NK(:), startblk(:), endblk(:)
     INTEGER nblocks
+    !$acc declare create(NI, NJ, NK, nblocks)
 END MODULE arrs
 
 
@@ -74,8 +73,10 @@ REAL, ALLOCATABLE :: xstencil(:,:), ystencil(:,:), zstencil(:,:), istencil(:), j
 REAL, ALLOCATABLE :: Lag_weights(:,:)
 REAL iinter,jinter
 REAL dw
+real time_s, time_einter, time_esearch, time_sinter
 
     !**********************************Background block*****************************************
+
 
 nblocks = 1
 
@@ -149,8 +150,8 @@ ALLOCATE(NJnew(nblocksnew))
 ALLOCATE(NKnew(nblocksnew))
  
 nbl =1
-NInew(nbl) = 5
-NJnew(nbl) = 5
+NInew(nbl) = 10
+NJnew(nbl) = 10
 NKnew(nbl) = 1
    	
 NImaxnew = maxval(NInew)
@@ -245,10 +246,12 @@ DO nbl = 1, nblocksnew
 END DO
 
 !***************************************call searching of KD tree******************************************
+call cpu_time(time_s)
 
 CALL search_funct(coordinates, numDimensions, numQuerys, query, results, numResults, rootIdx, mltip &
     , gindices, dists) 	
 
+call cpu_time(time_esearch)
 !***************************************Print Result******************************************
 
 !i=1
@@ -263,6 +266,7 @@ CALL search_funct(coordinates, numDimensions, numQuerys, query, results, numResu
 !END DO
 
 !**************************************KD Tree Search******************************************
+
 interptsx = 5
 interptsy = 3
 interplace = 2
@@ -280,10 +284,14 @@ ALLOCATE (jstencil(interptsy))
 !$acc data copyin (Xgrid, Ygrid, Zgrid, Xgridnew, Ygridnew, Zgridnew)
 !$acc data copyin (Igrid, Jgrid, Igridnew, Jgridnew)
 !$acc data copyin (coordinates, results, query, gindices, dists)
+!$acc data copyin (NI, NJ, NK)
 !$acc data copyin (istencil, jstencil, xstencil, ystencil, zstencil)
 
+call cpu_time(time_sinter)
+
 	DO nbl = 1,nblocksnew
-!$acc parallel loop collapse(3) private(istencil,jstencil,xstencil,ystencil,zstencil)
+!$acc parallel loop collapse(3)!! private(istencil,jstencil,xstencil,ystencil,zstencil)
+!@$acc data create(istencil, jstencil, xstencil, ystencil, zstencil)
     DO k = 1, NKnew(nbl)
     DO j = 1, NJnew(nbl)
     DO i = 1, NInew(nbl)
@@ -316,7 +324,7 @@ ALLOCATE (jstencil(interptsy))
 			END DO
             iinter = Igrid(loc_i, loc_j, loc_k,loc_blk)
 			jinter = Jgrid(loc_i, loc_j, loc_k,loc_blk)
-            print*, zstencil
+ !           print*, zstencil
 			call Coord_Interpolation(interptsx,interptsy,xstencil,ystencil,zstencil,istencil,jstencil &
                 ,query((index-1)*numDimensions+1),query((index-1)*numDimensions+2),query((index-1)*numDimensions+3),iinter,jinter)
 			Igridnew(i,j,k,nbl) = iinter
@@ -325,7 +333,8 @@ ALLOCATE (jstencil(interptsy))
 			print*, istencil
 			print*, jstencil
 			print*, iinter, jinter
-			pause
+            pause
+			
         END DO
     END DO
 	END DO
@@ -336,8 +345,12 @@ ALLOCATE (jstencil(interptsy))
 !$acc end data
 !$acc end data
 !$acc end data
+!$acc end data
 
+call cpu_time(time_einter)
 
+print*, time_esearch-time_s
+print*, time_einter-time_sinter
 
 !DO i=1, numQuerys*numResults
 !    CALL get_loc_index(gindices(i), loc_blk, loc_i, loc_j, loc_k)
@@ -353,7 +366,7 @@ END PROGRAM main
 
 !*************************************Local Index subroutine***************************************
 SUBROUTINE get_loc_index(global_index,blk,iloc,jloc,kloc)
-    !@@@$acc routine seq
+    !$acc routine seq
     USE arrs
 
     INTEGER :: global_index, blk, iloc, jloc, kloc
@@ -361,9 +374,9 @@ SUBROUTINE get_loc_index(global_index,blk,iloc,jloc,kloc)
     INTEGER :: sblk,eblk
     sblk=0
 
-    DO nbl = 1,1
-        eblk=256*256*1
-        !eblk=NI(nbl)*NJ(nbl)*NK(nbl)
+    DO nbl = 1,nblocks
+        !eblk=256*256*1
+        eblk=NI(nbl)*NJ(nbl)*NK(nbl)
         IF ((global_index>sblk).and.(global_index<=eblk)) THEN 
             blk = nbl
             EXIT
@@ -372,14 +385,14 @@ SUBROUTINE get_loc_index(global_index,blk,iloc,jloc,kloc)
     END DO
 
     rest_index = global_index - sblk
-    !kloc = int(rest_index/(NJ(blk)*NI(blk)))
-    kloc = int(rest_index/(256*256))
-    !rest_index = rest_index - kloc*NI(nbl)*NJ(nbl)
-    rest_index = rest_index - kloc*256*256
-    jloc = int(rest_index/(256))
-    !jloc = int(rest_index/(NI(nbl)))
-    !rest_index = rest_index - jloc*NI(blk)
-    rest_index = rest_index - jloc*256
+    kloc = int(rest_index/(NJ(blk)*NI(blk)))
+    !kloc = int(rest_index/(256*256))
+    rest_index = rest_index - kloc*NI(nbl)*NJ(nbl)
+    !rest_index = rest_index - kloc*256*256
+    !jloc = int(rest_index/(256))
+    jloc = int(rest_index/(NI(nbl)))
+    rest_index = rest_index - jloc*NI(blk)
+    !rest_index = rest_index - jloc*256
     iloc = int(rest_index)
     
     iloc = iloc+1
@@ -391,7 +404,7 @@ END
 !*************************************I-J prediction Subroutine********************************************
 SUBROUTINE Coord_Interpolation(nxint, nyint, xgint, ygint, zgint, igint, jgint, xpin, ypin, zpin, ipred, jpred)
 
-!@@@@$acc routine seq
+!$acc routine seq
 USE iso_c_binding
 implicit none
 

@@ -42,6 +42,7 @@
 #include <limits>
 #include <cuda_runtime.h>
 #include <omp.h>
+#include <omp.h>
 
 // includes, project
 #include <helper_cuda.h>
@@ -1299,6 +1300,17 @@ void Gpu::getSearchResultsGPU(pair_coord_dist** pqRefs, pair_coord_dist* pq, KdC
 		gindices[ind] = pq[ind].tpl;
 		dists[ind] = pow(pq[ind].dist,0.5);
 	}
+
+	/*
+	sint interptsx=5, interptsy=3, interplace=2;
+
+	double* xstencil, ystencil, zstencil, istencil, jstencil;
+	checkCudaErrors(cudaMalloc((void**) &xstencil, sizeof(double)*interptsx*interptsy));
+	checkCudaErrors(cudaMalloc((void**) &ystencil, sizeof(double)*interptsx*interptsy));
+	checkCudaErrors(cudaMalloc((void**) &zstencil, sizeof(double)*interptsx*interptsy));
+	checkCudaErrors(cudaMalloc((void**) &istencil, sizeof(double)*interptsx));
+	checkCudaErrors(cudaMalloc((void**) &jstencil, sizeof(double)*interptsy));
+	*/
 }
 
 void Gpu::searchKdTreeGPU(refIdx_t root, const KdCoord* query, const sint numResults, const sint dim, pair_coord_dist**pqRefs, int q, float mltip) {
