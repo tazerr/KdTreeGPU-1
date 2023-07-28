@@ -17,6 +17,7 @@ MODULE call_kd_tree
 
 		SUBROUTINE search_funct(coordinates, numDimensions, numQuerys, query, results, numResults, rootIdx &
             , mltip, gindices, dists) bind(C, name="search_funct")
+            !@@$acc routine seq
             USE iso_c_binding
             REAL(c_float), dimension(*) :: coordinates
             INTEGER(c_int), value :: numDimensions
@@ -284,7 +285,7 @@ ALLOCATE (jstencil(interptsy))
 !$acc data copyin (Xgrid, Ygrid, Zgrid, Xgridnew, Ygridnew, Zgridnew)
 !$acc data copyin (Igrid, Jgrid, Igridnew, Jgridnew)
 !$acc data copyin (coordinates, results, query, gindices, dists)
-!$acc data copyin (NI, NJ, NK)
+!$acc data copyin (NI, NJ, NK, NKnew, NJnew, NInew)
 !$acc data copyin (istencil, jstencil, xstencil, ystencil, zstencil)
 
 call cpu_time(time_sinter)
@@ -330,10 +331,10 @@ call cpu_time(time_sinter)
 			Igridnew(i,j,k,nbl) = iinter
 			Jgridnew(i,j,k,nbl) = jinter
         
-			print*, istencil
-			print*, jstencil
-			print*, iinter, jinter
-            pause
+!			print*, istencil
+!			print*, jstencil
+!			print*, iinter, jinter
+!            pause
 			
         END DO
     END DO
