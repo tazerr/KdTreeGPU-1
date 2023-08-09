@@ -402,6 +402,244 @@ void KdNode::printKdTree(KdNode kdNodes[], const KdCoord coords[], const sint di
 	}
 }
 
+
+
+
+
+
+
+
+
+void cprintResultwhole(pair_coord_dist* gpq, sint* numQuerys, const sint* numResults, const KdCoord* coords, const sint* dim, float* mltip) {
+
+	for(int q=0;q<*numQuerys; q++){
+		printf("\n");
+		pair_coord_dist* pq = &gpq[q*(*numResults)];
+		for(int i=0; i<*numResults;i++){
+			for(int j=0;j<*dim;j++){
+				printf(" %f ", coords[pq[i].tpl*(*dim)+j]/(*mltip));
+			}
+			printf("\n");
+		}
+	}
+
+}
+
+void cdistCalc(pair_coord_dist* nd_pair, const KdCoord* query, const KdCoord* coords, const sint* dim, float* mltip) {
+
+	double dx = coords[(nd_pair->tpl)*(*dim) + 0]/(*mltip) - query[0];
+    double dy = coords[(nd_pair->tpl)*(*dim) + 1]/(*mltip) - query[1];
+    double dz = coords[(nd_pair->tpl)*(*dim) + 2]/(*mltip) - query[2];
+
+	nd_pair->dist = (dx*dx + dy*dy + dz*dz);
+
+}
+
+void cinsertSort(pair_coord_dist* pq, sint* counter, const sint* numResults, pair_coord_dist* nd_pair) {
+
+	if (*counter<(*numResults)) {
+		pq[*counter]=*nd_pair;
+		*counter = (*counter) +1;
+		for (int i=1; i<(*counter); i++) {
+			pair_coord_dist key = pq[i];
+			int j=i-1;
+
+			while (j >= 0 && pq[j].dist > key.dist) {
+				pq[j+1] = pq[j];
+				j=j-1;
+			}
+
+			pq[j+1] = key;
+		}
+	}
+	else if (nd_pair->dist < pq[(*numResults)-1].dist) {
+		pq[(*numResults)-1] = *nd_pair;
+		for (int i=1; i<(*numResults); i++) {
+			pair_coord_dist key = pq[i];
+			int j=i-1;
+
+			while (j >= 0 && pq[j].dist > key.dist) {
+				pq[j+1] = pq[j];
+				j=j-1;
+			}
+
+			pq[j+1] = key;
+		}
+	}
+
+}
+
+void cinsertInList(KdNode* node, litem** ch, const sint* dim) {
+	//litem *li = (litem*) malloc(sizeof(litem));
+	litem* li;
+	li = (litem*)malloc(sizeof(litem));
+	if(li==nullptr) printf("ERRORR!!!!!\n\n");
+    
+    li->data = node;
+    li->axis = (ch[0]->axis+1)%(*dim);
+    li->next = nullptr;
+ 
+    ch[1]->next = li;
+    ch[1] = li;
+}
+
+void cIterSearchKdTree(KdNode *root, KdNode kdNodes[], const KdCoord coords[], const KdCoord* query, const sint* numResults,
+		const sint* dim, sint* counter, float* mltip, sint* numQuerys, pair_coord_dist* gpq) {
+
+	int tid;
+	for(tid=0; tid<*numQuerys; tid++) {
+		if(tid<*numQuerys) {
+			
+			const KdCoord* qu = &query[tid*(*dim)];
+			pair_coord_dist* pq = &gpq[tid*(*numResults)];
+			sint dcounter=0;
+			
+			litem *ls;
+			ls = (litem*)malloc(sizeof(litem));
+			ls->data = root;
+			ls->axis=0;
+			ls->next=nullptr;
+			litem* ch[2];
+			ch[0] = ls;
+			ch[1] = ls;
+
+			//printf("%d\n", tid);
+
+			printf("Query Point %d :: %f %f %f\n", tid, qu[0], qu[1], qu[2]);
+
+			int numIter=0;
+			
+			//printf("%d\n", tid);
+			
+			while(ch[0]!=ch[1] || ch[0]->data==root) {
+				
+				//if(ch[0]->data==nullptr) {
+					//ch[0] = ch[0]->next;
+					//continue;
+				//}
+				numIter++;
+				//printf("tid: %d\n",tid);
+				//printf("%f %f %f \n", qu[0], qu[1], qu[2]);
+				pair_coord_dist nd_pair;
+
+				//printf("Assigned ndcoord\n");
+				nd_pair.tpl = ch[0]->data->tuple;
+
+				//printf("Assigned ndcoord tpl\n");
+				cdistCalc(&nd_pair, qu, coords, dim, mltip);
+				//printf("Calculated Distance\n");
+
+				cinsertSort(pq, &dcounter, numResults, &nd_pair);
+				//printf("Inserted the pair in pq\n");
+
+				double perp_ = coords[ch[0]->data->tuple*(*dim) + ch[0]->axis]/(*mltip) - qu[ch[0]->axis];
+
+				if (pow(perp_,2)<pq[dcounter-1].dist){
+
+					if (ch[0]->data->ltChild!=-1)
+					{
+						
+						//printf("Inside 1st if %d %d\n", ch[0]->data->ltChild, sizeof(kdNodes));
+						cinsertInList(&kdNodes[ch[0]->data->ltChild], ch, dim);
+						//printf("Exit 1st if\n");
+					}
+					
+					if (ch[0]->data->gtChild!=-1)
+					{
+						//printf("Inside 2ns if\n");
+						cinsertInList(&kdNodes[ch[0]->data->gtChild], ch, dim);
+						//printf("Exit 2nd if\n");
+					}
+				}
+
+				else 
+				{
+					if (perp_<0) 
+					{
+						if (ch[0]->data->gtChild!=-1)
+						{
+							//printf("Inside 3rd if\n");
+							cinsertInList(&kdNodes[ch[0]->data->gtChild], ch, dim);
+							//printf("Exit 3rd if\n");
+						}	
+					}
+					else 
+					{
+						if (ch[0]->data->ltChild!=-1)
+						{
+							//printf("Inside 4th if\n");
+							cinsertInList(&kdNodes[ch[0]->data->ltChild], ch, dim);
+							//printf("Exit 4th if\n");
+						}
+					}
+				}
+				litem* temp = ch[0];
+				ch[0] = ch[0]->next;
+				free(temp);
+				//printf("changed the current pointer\n");
+
+			}
+			
+
+			//printResult<<<1,1>>>(pq, numResults, coords, dim, mltip);
+			printf("tid: %d :::: Iter:%d\n\n",tid, numIter);
+
+		}
+	
+	}
+	
+
+}
+
+void cSearchKdtreeCPU(KdCoord* coordinates, KdNode kdNodes[], refIdx_t root, const KdCoord* query, const sint numResults, 
+	const sint dim, KdCoord* results, sint numQuerys, pair_coord_dist** pqRefs, float mltip) {
+
+		//Declare variables pointers for device
+	float* d_mltip = &mltip;
+	const sint* d_numResults= &numResults;
+	const sint* d_dim = &dim;
+	
+	pair_coord_dist* d_pq;
+	d_pq = (pair_coord_dist*) malloc(sizeof(pair_coord_dist)*numQuerys*numResults);
+
+	sint counter = 0;
+	sint*d_counter = &counter;
+	
+	sint* d_numQuerys = &numQuerys;
+	pair_coord_dist** d_pqRefs;
+	litem* temp;
+
+	cudaEvent_t start, stop;
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
+
+	cudaEventRecord(start);
+	
+
+	cIterSearchKdTree(kdNodes+root, kdNodes, coordinates, query, d_numResults, d_dim, d_counter, d_mltip, d_numQuerys, d_pq);
+	cudaEventRecord(stop);
+	cudaEventSynchronize(stop);
+	float searchSeconds = 0;
+	cudaEventElapsedTime(&searchSeconds, start, stop);
+	searchSeconds = searchSeconds/1000;
+	
+	cudaEventRecord(start);
+	cprintResultwhole(d_pq, d_numQuerys, d_numResults, coordinates, d_dim, d_mltip);
+	cudaEventRecord(stop);
+	cudaEventSynchronize(stop);
+	float printSeconds;
+	cudaEventElapsedTime(&printSeconds, start, stop);
+	printSeconds = printSeconds/1000;
+	printf("cuIterSearchKdTree Kernel execution time: %f s\n", searchSeconds);
+	printf("printResultwhole Kernel execution time: %f s\n", printSeconds);
+
+
+	cudaEventDestroy(start);
+	cudaEventDestroy(stop);
+	//checkCudaErrors(cudaDeviceSynchronize());
+	pqRefs[0] = d_pq;
+	}
+
 //Declaration for the custom function so that it can be called by fortran
 extern "C" {
     void custom_funct(KdCoord* coordinates, sint numPoints, sint numQuerys, KdCoord* query, KdCoord* results, sint numResults, sint* rootIdx);
@@ -450,115 +688,32 @@ void custom_funct( KdCoord* coordinates, sint numPoints, sint numQuerys, KdCoord
 
 	cout<<"KD TREE MADE and stored on GPU"<<endl;
 
+
 	// rootIdx stores the index of the root node on the kdnodes array
 	// this value is later passed to the searchKdTree function  
 	*rootIdx = root-kdNodes;
-	//cout << "CUDA ROOT: " << *rootIdx << endl;
-	
-	/*
-	TIMER_DECLARATION()
 
-	TIMER_START()
-	// SEARCH FOR Nearest Neighbour
-	pair_coord_dist* pqRefs[numQuerys];
-	Gpu::searchKdTree(coordinates, *rootIdx, query, numResults, numDimensions, results, numQuerys, pqRefs);
-	TIMER_STOP(double searchTime);
-	
-	cout << "Total Search Time = " << searchTime << endl;
-	Gpu::getSearchResults(pqRefs, coordinates, numResults, numDimensions, results, numQuerys);	
+	// TIMER_DECLARATION();
 
-	*/
+	// TIMER_START();
+	// Gpu::getKdTreeResults( kdNodes,  coordinates, numPoints, numDimensions);
+	// TIMER_STOP(double copyTreeTime);
 
-	/*
-	TIMER_DECLARATION();
-	
-	
-	// read the KdTree back from GPU
-	Gpu::getKdTreeResults( kdNodes,  coordinates, numPoints, numDimensions);
-	//printf("host ke root ka cordi: %f", coordinates[kdNodes[root-kdNodes].tuple]);
-	
-#define VERIFY_ON_HOST
-#ifdef VERIFY_ON_HOST
-	sint numberOfNodes = root->verifyKdTree( kdNodes, coordinates, numDimensions, 0);
-	cout <<  "Number of nodes on host = " << numberOfNodes << endl;
-#endif
-	
-	
+	// TIMER_START();
+	// // SEARCH FOR Nearest Neighbour
+	// pair_coord_dist* pqRefs[numQuerys];
+	// cSearchKdtreeCPU(coordinates, kdNodes, *rootIdx, query, numResults, numDimensions, results, numQuerys, pqRefs, 100000);
+	// TIMER_STOP(double searchTime);
 
-	TIMER_START();
-	
-	//list<KdNode> kdList = root->searchKdTree(kdNodes, coordinates, query, searchDistance, numDimensions, 0);
-	
-	priority_queue<pair<double, KdNode*>, vector<pair<double, KdNode*>>, QueueComparator> pq;
-	csearchKdTree(root, kdNodes, coordinates, query, numResults, numDimensions, 0, pq);
-	
-	
-	TIMER_STOP(double searchTime);
-	cout << "searchTime = " << fixed << setprecision(2) << searchTime << " seconds" << endl << endl;
-
-	
-	cout << endl << pq.size() << " closest nodes found to the point ";
-	KdNode::printTuple(query, numDimensions);
-	cout << endl;
-
-	sint it=0;
-	while (!pq.empty()) {
-		for (sint i = 0; i < numDimensions; i++)
-		{
-			results[it*numDimensions+i] = coordinates[((pq.top().second->tuple)*numDimensions)+i];
-		}
-        pq.pop();
-		it++;
-    }
-	*/
-	
-		
-	/*
-	cout << endl << kdList.size() << " nodes within " << searchDistance << " units of ";
-	KdNode::printTuple(query, numDimensions);
-	cout << " in all dimensions." << endl << endl;
-
-	if (kdList.size() != 0) {
-		cout << "List of k-d nodes within " << searchDistance << "-unit search distance follows:" << endl << endl;
-		list<KdNode>::iterator it;
-		sint r=0;
-		for (it = kdList.begin(); it != kdList.end(); it++) {
-			KdNode::printTuple(coordinates+it->getTuple()*numDimensions, numDimensions);
-			KdCoord *tup = coordinates+it->getTuple()*numDimensions;
-
-			double curr_dist = euclideanDistance(&(*it), query, coordinates, numDimensions);
-			if (pq.size() < numResults) 
-			{
-				pq.push({curr_dist, &(*it)});
-			}
-			else if (curr_dist < pq.top().first) 
-			{
-				pq.pop();
-				pq.push({curr_dist, &(*it)});
-			}
-
-			cout << " ";
-		}
-		cout << endl;
-	}
-
-	sint it=0;
-	while (!pq.empty()) {
-		for (sint i = 0; i < numDimensions; i++)
-		{
-			results[it*numDimensions+i] = coordinates[((pq.top().second->tuple)*numDimensions)+i];
-		}
-        pq.pop();
-		it++;
-    }
-	*/
+	// printf("time to copy tree %f\n", copyTreeTime);
+	// cout << "Total Search Time = " << searchTime << endl;
 	
 }
 
 
 //Declaration for the custom function so that it can be called by fortran
 extern "C" {
-    void search_funct(KdCoord* coordinates, sint numPoints, sint numQuerys, KdCoord* query, KdCoord* results, sint numResults, sint rootIdx, float mltip, sint* gindices, double* dists);
+    void search_funct(KdCoord* coordinates, sint numPoints, sint numDimensions, sint numQuerys, KdCoord* query, KdCoord* results, sint numResults, sint rootIdx, float mltip, sint* gindices, double* dists);
 }
 
 /*
@@ -569,21 +724,47 @@ extern "C" {
  * 
  * 
 */
-void search_funct( KdCoord* coordinates, sint numDimensions, sint numQuerys, KdCoord* query, KdCoord* results, sint numResults, sint rootIdx, float mltip, sint* gindices, double* dists)
+void search_funct( KdCoord* coordinates, sint numPoints, sint numDimensions, sint numQuerys, KdCoord* query, KdCoord* results, sint numResults, sint rootIdx, float mltip, sint* gindices, double* dists)
 {
 	// rootIdx stores the index of the root node on the kdnodes array
 	// this value is later passed to the searchKdTree function  
+	KdNode *kdNodes = new KdNode[numPoints];
+	if (kdNodes == NULL) {
+		printf("Can't allocate %d kdNodes\n", numPoints);
+		exit (1);
+	}
 
-	TIMER_DECLARATION()
+	TIMER_DECLARATION();
 
-	TIMER_START()
+	TIMER_START();
+	Gpu::getKdTreeResults( kdNodes,  coordinates, numPoints, numDimensions);
+	TIMER_STOP(double copyTreeTime);
+
+	printf("time to copy tree %f\n", copyTreeTime);
+	printf("HERE %d\n", kdNodes[rootIdx].tuple);
+
+	TIMER_START();
 	// SEARCH FOR Nearest Neighbour
 	pair_coord_dist* pqRefs[numQuerys];
-	Gpu::searchKdTree(coordinates, rootIdx, query, numResults, numDimensions, results, numQuerys, pqRefs, mltip);
+	cSearchKdtreeCPU(coordinates, kdNodes, rootIdx, query, numResults, numDimensions, results, numQuerys, pqRefs, mltip);
 	TIMER_STOP(double searchTime);
-	cout << "Total Search Time = " << searchTime << endl;
+	//cout << "Total Search Time = " << searchTime << endl;
 
-	Gpu::getSearchResults(pqRefs, coordinates, numResults, numDimensions, results, numQuerys, mltip, gindices, dists);
+
+	// TIMER_DECLARATION();
+
+	// TIMER_START();
+	// // SEARCH FOR Nearest Neighbour
+	// pair_coord_dist* pqRefs[numQuerys];
+	// Gpu::searchKdTree(coordinates, rootIdx, query, numResults, numDimensions, results, numQuerys, pqRefs, mltip);
+	// TIMER_STOP(double searchTime);
+	// //cout << "Total Search Time = " << searchTime << endl;
+
+	// TIMER_START();
+	// Gpu::getSearchResults(pqRefs, coordinates, numResults, numDimensions, results, numQuerys, mltip, gindices, dists);
+	// TIMER_STOP(double getSearchResultsTime);
+	// printf("Total time taken to get the results back cudaMemcpy (including cudaMemcpy (Gpu::getSearchResultsGPU) time): %f s\n", getSearchResultsTime);
+	
 
 	
 	
