@@ -52,6 +52,12 @@ struct pair_coord_dist {
 	int32_t tpl;
 };
 
+struct litem {
+	KdNode* data;
+	litem* next;
+    int axis;
+};
+
 class Gpu {
 	// Gpu class constants;
 	static const uint MAX_THREADS = 1024;
@@ -309,6 +315,8 @@ private: //Methods specifc to searchKdtree
 	void searchKdTreeGPU(refIdx_t root, const KdCoord* query, const sint numResults, const sint dim, pair_coord_dist**pqRefs, int q, float mltip);
 	void getSearchResultsGPU(pair_coord_dist** pqRefs, pair_coord_dist* pq, KdCoord* coordinates, const sint numResults, const sint dim, 
 		KdCoord* results, sint numQuerys, float mltip, sint* gindices, double* dists);
+	void accsearchKdTreeGPU(KdNode *node, KdNode kdNodes[], const KdCoord coords[], const KdCoord* query, sint numResults,
+		sint dim, sint axis, pair_coord_dist* pq, sint* counter, float mltip);
 };
 
 

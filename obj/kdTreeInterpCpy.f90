@@ -15,11 +15,12 @@ MODULE call_kd_tree
 			INTEGER(c_int), intent(inout) :: rootIdx
         END SUBROUTINE
 
-		SUBROUTINE search_funct(coordinates, numDimensions, numQuerys, query, results, numResults, rootIdx &
+		SUBROUTINE search_funct(coordinates, numPoints, numDimensions, numQuerys, query, results, numResults, rootIdx &
             , mltip, gindices, dists) bind(C, name="search_funct")
             !@@$acc routine seq
             USE iso_c_binding
             REAL(c_float), dimension(*) :: coordinates
+            INTEGER(c_int), value :: numPoints
             INTEGER(c_int), value :: numDimensions
             INTEGER(c_int), value :: numQuerys
             REAL(c_float), dimension(*) :: query
@@ -93,7 +94,7 @@ ALLOCATE(NK(nblocks))
 nbl =1
 NI(nbl) = 256
 NJ(nbl) = 256
-NK(nbl) = 1
+NK(nbl) = 256
 
 NImax = maxval(NI)
 NJmax = maxval(NJ)
@@ -112,9 +113,9 @@ DO nbl = 1,nblocks
         DO j = 1,NJ(nbl)
             DO i = 1,NI(nbl)
 
-        Xgrid(i,j,k,nbl) = -6.d0 + (Lx/(NI(nbl)-1.d0)) * ((i-1.d0) + sin(6.d0*3.14d0*(j-1)*(1.d0/(NJ(nbl)-1))))
-        Ygrid(i,j,k,nbl) = -6.d0 + (Ly/(NJ(nbl)-1.d0)) * ((j-1.d0) + 2.d0 * sin(6.d0*3.14d0*(i-1)*(1.d0/(NI(nbl)-1))))
-        Zgrid(i,j,k,nbl) = Lz*(k-1.d0)
+        Xgrid(i,j,k,nbl) = i !-6.d0 + (Lx/(NI(nbl)-1.d0)) * ((i-1.d0) + sin(6.d0*3.14d0*(j-1)*(1.d0/(NJ(nbl)-1))))
+        Ygrid(i,j,k,nbl) = j !-6.d0 + (Ly/(NJ(nbl)-1.d0)) * ((j-1.d0) + 2.d0 * sin(6.d0*3.14d0*(i-1)*(1.d0/(NI(nbl)-1))))
+        Zgrid(i,j,k,nbl) = k !Lz*(k-1.d0)
 		
 		Igrid(i,j,k,nbl) = 1.d0 * i
 		Jgrid(i,j,k,nbl) = 1.d0 * j
@@ -151,8 +152,8 @@ ALLOCATE(NJnew(nblocksnew))
 ALLOCATE(NKnew(nblocksnew))
  
 nbl =1
-NInew(nbl) = 10
-NJnew(nbl) = 10
+NInew(nbl) = 51
+NJnew(nbl) = 51
 NKnew(nbl) = 1
    	
 NImaxnew = maxval(NInew)
@@ -172,9 +173,9 @@ DO nbl = 1,nblocksnew
 		DO j = 1,NJnew(nbl)
             DO i = 1,NInew(nbl)
 
-        Xgridnew(i,j,k,nbl) = -3.d0 + Lx*(i-1.d0)/(NInew(nbl)-1.d0)
-        Ygridnew(i,j,k,nbl) = -3.d0 + Ly*(j-1.d0)/(NJnew(nbl)-1.d0)
-        Zgridnew(i,j,k,nbl) = Lz*(k-1.d0)
+        Xgridnew(i,j,k,nbl) = i !-3.d0 + Lx*(i-1.d0)/(NInew(nbl)-1.d0)
+        Ygridnew(i,j,k,nbl) = j !-3.d0 + Ly*(j-1.d0)/(NJnew(nbl)-1.d0)
+        Zgridnew(i,j,k,nbl) = k !Lz*(k-1.d0)
 
             END DO
 		END DO
@@ -187,7 +188,7 @@ numDimensions=3
 numPoints = size(xgrid)
 sizeOfarray = numPoints*numDimensions
 numQuerys = size(Xgridnew)
-numResults = 1
+numResults = 10
 ALLOCATE(results(numResults*numDimensions*numQuerys))
 
 ALLOCATE(coordinates(sizeOfarray))
@@ -216,7 +217,9 @@ DO nbl = 1, nblocks
 END DO
 !***************************************call creation of KD tree******************************************
 
-CALL custom_funct(coordinates, numPoints, numQuerys, query, results, numResults, rootIdx)
+!CALL custom_funct(coordinates, numPoints, numQuerys, query, results, numResults, rootIdx)
+!print*, numPoints
+!pause
 
 !***************************************Prepartion to call searching of KD tree******************************************
 
@@ -249,11 +252,20 @@ END DO
 !***************************************call searching of KD tree******************************************
 call cpu_time(time_s)
 
-CALL search_funct(coordinates, numDimensions, numQuerys, query, results, numResults, rootIdx, mltip &
+CALL custom_funct(coordinates, numPoints, numQuerys, query, results, numResults, rootIdx)
+
+CALL search_funct(coordinates, numPoints, numDimensions, numQuerys, query, results, numResults, rootIdx, mltip &
     , gindices, dists) 	
 
+!pause
 call cpu_time(time_esearch)
 !***************************************Print Result******************************************
+!DO WHILE(i<=numQuerys*numResults)
+!WRITE(*,*), gindices(i)
+!i=i+1
+!END DO
+
+!write(*,*), "SEARCH FINISHED"
 
 !i=1
 !j=1
@@ -268,90 +280,90 @@ call cpu_time(time_esearch)
 
 !**************************************KD Tree Search******************************************
 
-interptsx = 5
-interptsy = 3
-interplace = 2
-
-!ALLOCATE(query(numQuerys*numDimensions))
-!ALLOCATE(gindices(numQuerys*numResults))
-!ALLOCATE(dists(numQuerys*numResults))
-
-ALLOCATE (xstencil(interptsx,interptsy))
-ALLOCATE (ystencil(interptsx,interptsy))
-ALLOCATE (zstencil(interptsx,interptsy))
-ALLOCATE (istencil(interptsx))
-ALLOCATE (jstencil(interptsy))
-
-!$acc data copyin (Xgrid, Ygrid, Zgrid, Xgridnew, Ygridnew, Zgridnew)
-!$acc data copyin (Igrid, Jgrid, Igridnew, Jgridnew)
-!$acc data copyin (coordinates, results, query, gindices, dists)
-!$acc data copyin (NI, NJ, NK, NKnew, NJnew, NInew)
-!$acc data copyin (istencil, jstencil, xstencil, ystencil, zstencil)
-
-call cpu_time(time_sinter)
-
-	DO nbl = 1,nblocksnew
-!$acc parallel loop collapse(3)!! private(istencil,jstencil,xstencil,ystencil,zstencil)
-!@$acc data create(istencil, jstencil, xstencil, ystencil, zstencil)
-    DO k = 1, NKnew(nbl)
-    DO j = 1, NJnew(nbl)
-    DO i = 1, NInew(nbl)
-
-        !query(1) = xgridnew(i,j,k,nbl)
-		!query(2) = ygridnew(i,j,k,nbl)
-		!query(3) = zgridnew(i,j,k,nbl)
-
-        !CALL search_funct(coordinates, numDimensions, numQuerys, query, results &
-        !    , numResults, rootIdx, mltip, gindices, dists)
-
-        ! Get the current index
-        index = (nbl-1)*NInew(nbl)*NJnew(nbl)*NKnew(nbl)+ &
-            (k-1)*NInew(nbl)*NJnew(nbl)+ &
-            (j-1)*NInew(nbl)+ &
-            (i-1) + 1
-            
-        DO indexing = 1,numResults
-			convertindex = gindices((index-1)*numResults+indexing)
-			dw = (dists((index-1)*numResults+indexing))**0.5
-			call get_loc_index(convertindex,loc_blk, loc_i, loc_j, loc_k)
-            DO indx = 1,interptsx
-				istencil(indx) = Igrid(loc_i + indx - interplace, loc_j, loc_k,loc_blk)
-				DO indy = 1,interptsy
-					xstencil(indx,indy) = Xgrid(loc_i + indx - interplace, loc_j+ indy - interplace, loc_k,loc_blk)
-					ystencil(indx,indy) = Ygrid(loc_i + indx - interplace, loc_j+ indy - interplace, loc_k,loc_blk)
-					zstencil(indx,indy) = Zgrid(loc_i + indx - interplace, loc_j+ indy - interplace, loc_k,loc_blk)
-					jstencil(indy) = Jgrid(loc_i, loc_j + indy - interplace, loc_k,loc_blk)
-				END DO
-			END DO
-            iinter = Igrid(loc_i, loc_j, loc_k,loc_blk)
-			jinter = Jgrid(loc_i, loc_j, loc_k,loc_blk)
- !           print*, zstencil
-			call Coord_Interpolation(interptsx,interptsy,xstencil,ystencil,zstencil,istencil,jstencil &
-                ,query((index-1)*numDimensions+1),query((index-1)*numDimensions+2),query((index-1)*numDimensions+3),iinter,jinter)
-			Igridnew(i,j,k,nbl) = iinter
-			Jgridnew(i,j,k,nbl) = jinter
-        
-!			print*, istencil
-!			print*, jstencil
-!			print*, iinter, jinter
-!            pause
-			
-        END DO
-    END DO
-	END DO
-	END DO
-	END DO
-
-!$acc end data
-!$acc end data
-!$acc end data
-!$acc end data
-!$acc end data
-
-call cpu_time(time_einter)
-
-print*, time_esearch-time_s
-print*, time_einter-time_sinter
+!interptsx = 5
+!interptsy = 3
+!interplace = 2
+!
+!!ALLOCATE(query(numQuerys*numDimensions))
+!!ALLOCATE(gindices(numQuerys*numResults))
+!!ALLOCATE(dists(numQuerys*numResults))
+!
+!ALLOCATE (xstencil(interptsx,interptsy))
+!ALLOCATE (ystencil(interptsx,interptsy))
+!ALLOCATE (zstencil(interptsx,interptsy))
+!ALLOCATE (istencil(interptsx))
+!ALLOCATE (jstencil(interptsy))
+!
+!!$acc data copyin (Xgrid, Ygrid, Zgrid, Xgridnew, Ygridnew, Zgridnew)
+!!$acc data copyin (Igrid, Jgrid, Igridnew, Jgridnew)
+!!$acc data copyin (coordinates, results, query, gindices, dists)
+!!$acc data copyin (NI, NJ, NK, NKnew, NJnew, NInew)
+!!$acc data copyin (istencil, jstencil, xstencil, ystencil, zstencil)
+!
+!call cpu_time(time_sinter)
+!
+!	DO nbl = 1,nblocksnew
+!!$acc parallel loop collapse(3)!! private(istencil,jstencil,xstencil,ystencil,zstencil)
+!!@$acc data create(istencil, jstencil, xstencil, ystencil, zstencil)
+!    DO k = 1, NKnew(nbl)
+!    DO j = 1, NJnew(nbl)
+!    DO i = 1, NInew(nbl)
+!
+!        !query(1) = xgridnew(i,j,k,nbl)
+!		!query(2) = ygridnew(i,j,k,nbl)
+!		!query(3) = zgridnew(i,j,k,nbl)
+!
+!        !CALL search_funct(coordinates, numDimensions, numQuerys, query, results &
+!        !    , numResults, rootIdx, mltip, gindices, dists)
+!
+!        ! Get the current index
+!        index = (nbl-1)*NInew(nbl)*NJnew(nbl)*NKnew(nbl)+ &
+!            (k-1)*NInew(nbl)*NJnew(nbl)+ &
+!            (j-1)*NInew(nbl)+ &
+!            (i-1) + 1
+!            
+!        DO indexing = 1,numResults
+!			convertindex = gindices((index-1)*numResults+indexing)
+!			dw = (dists((index-1)*numResults+indexing))**0.5
+!			call get_loc_index(convertindex,loc_blk, loc_i, loc_j, loc_k)
+!            DO indx = 1,interptsx
+!				istencil(indx) = Igrid(loc_i + indx - interplace, loc_j, loc_k,loc_blk)
+!				DO indy = 1,interptsy
+!					xstencil(indx,indy) = Xgrid(loc_i + indx - interplace, loc_j+ indy - interplace, loc_k,loc_blk)
+!					ystencil(indx,indy) = Ygrid(loc_i + indx - interplace, loc_j+ indy - interplace, loc_k,loc_blk)
+!					zstencil(indx,indy) = Zgrid(loc_i + indx - interplace, loc_j+ indy - interplace, loc_k,loc_blk)
+!					jstencil(indy) = Jgrid(loc_i, loc_j + indy - interplace, loc_k,loc_blk)
+!				END DO
+!			END DO
+!            iinter = Igrid(loc_i, loc_j, loc_k,loc_blk)
+!			jinter = Jgrid(loc_i, loc_j, loc_k,loc_blk)
+! !           print*, zstencil
+!			call Coord_Interpolation(interptsx,interptsy,xstencil,ystencil,zstencil,istencil,jstencil &
+!                ,query((index-1)*numDimensions+1),query((index-1)*numDimensions+2),query((index-1)*numDimensions+3),iinter,jinter)
+!			Igridnew(i,j,k,nbl) = iinter
+!			Jgridnew(i,j,k,nbl) = jinter
+!        
+!!			print*, istencil
+!!			print*, jstencil
+!!			print*, iinter, jinter
+!!            pause
+!			
+!        END DO
+!    END DO
+!	END DO
+!	END DO
+!	END DO
+!
+!!$acc end data
+!!$acc end data
+!!$acc end data
+!!$acc end data
+!!$acc end data
+!
+!call cpu_time(time_einter)
+!
+print*, "TOTAL TIME TAKEN FOR SEARCH + GETTING RESULTS BACK: ", time_esearch-time_s
+!print*, time_einter-time_sinter
 
 !DO i=1, numQuerys*numResults
 !    CALL get_loc_index(gindices(i), loc_blk, loc_i, loc_j, loc_k)

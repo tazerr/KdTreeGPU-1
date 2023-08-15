@@ -728,37 +728,20 @@ void search_funct( KdCoord* coordinates, sint numPoints, sint numDimensions, sin
 {
 	// rootIdx stores the index of the root node on the kdnodes array
 	// this value is later passed to the searchKdTree function  
-	KdNode *kdNodes = new KdNode[numPoints];
-	if (kdNodes == NULL) {
-		printf("Can't allocate %d kdNodes\n", numPoints);
-		exit (1);
-	}
+	// KdNode *kdNodes = new KdNode[numPoints];
+	// if (kdNodes == NULL) {
+	// 	printf("Can't allocate %d kdNodes\n", numPoints);
+	// 	exit (1);
+	// }
 
 	TIMER_DECLARATION();
 
 	TIMER_START();
-	Gpu::getKdTreeResults( kdNodes,  coordinates, numPoints, numDimensions);
-	TIMER_STOP(double copyTreeTime);
-
-	printf("time to copy tree %f\n", copyTreeTime);
-	printf("HERE %d\n", kdNodes[rootIdx].tuple);
-
-	TIMER_START();
 	// SEARCH FOR Nearest Neighbour
 	pair_coord_dist* pqRefs[numQuerys];
-	cSearchKdtreeCPU(coordinates, kdNodes, rootIdx, query, numResults, numDimensions, results, numQuerys, pqRefs, mltip);
+	Gpu::searchKdTree(coordinates, rootIdx, query, numResults, numDimensions, results, numQuerys, pqRefs, mltip);
 	TIMER_STOP(double searchTime);
-	//cout << "Total Search Time = " << searchTime << endl;
-
-
-	// TIMER_DECLARATION();
-
-	// TIMER_START();
-	// // SEARCH FOR Nearest Neighbour
-	// pair_coord_dist* pqRefs[numQuerys];
-	// Gpu::searchKdTree(coordinates, rootIdx, query, numResults, numDimensions, results, numQuerys, pqRefs, mltip);
-	// TIMER_STOP(double searchTime);
-	// //cout << "Total Search Time = " << searchTime << endl;
+	cout << "Total Search Time = " << searchTime << endl;
 
 	// TIMER_START();
 	// Gpu::getSearchResults(pqRefs, coordinates, numResults, numDimensions, results, numQuerys, mltip, gindices, dists);

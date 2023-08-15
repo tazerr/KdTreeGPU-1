@@ -18,7 +18,7 @@ MODULE call_kd_tree
 		SUBROUTINE search_funct(coordinates, numDimensions, numQuerys, query, results, numResults, rootIdx &
             , mltip, gindices, dists) bind(C, name="search_funct")
 
-            !@@$acc routine seq
+            !$acc routine seq
             USE iso_c_binding
             REAL(c_float), dimension(*) :: coordinates
             INTEGER(c_int), value :: numDimensions
@@ -116,7 +116,7 @@ DO nbl = 1,nblocks
 		
 		Igrid(i,j,k,nbl) = 1.d0 * i
 		Jgrid(i,j,k,nbl) = 1.d0 * j
-		Kgrid(i,j,k,nbl) = 1.d0 * k
+		!Kgrid(i,j,k,nbl) = 1.d0 * k
 		
             END DO
         END DO
@@ -184,7 +184,7 @@ END DO
 numDimensions=3
 numPoints = size(xgrid)
 sizeOfarray = numPoints*numDimensions
-numQuerys = size(Xgridnew)
+numQuerys = 1 !size(Xgridnew)
 numResults = 1
 ALLOCATE(results(numResults*numDimensions*numQuerys))
 
@@ -218,36 +218,36 @@ CALL custom_funct(coordinates, numPoints, numQuerys, query, results, numResults,
 
 !***************************************Prepartion to call searching of KD tree******************************************
 
-ALLOCATE(query(numQuerys*numDimensions))
-ALLOCATE(gindices(numQuerys*numResults))
-ALLOCATE(dists(numQuerys*numResults))
-
-DO nbl = 1, nblocksnew
-    DO k = 1, NKnew(nbl)
-        DO j = 1, NJnew(nbl)
-            DO i = 1, NInew(nbl)
-            
-            ! Get the current index
-            index = (nbl-1)*NInew(nbl)*NJnew(nbl)*NKnew(nbl)*numDimensions + &
-                (k-1)*NInew(nbl)*NJnew(nbl)*numDimensions + &
-                (j-1)*NInew(nbl)*numDimensions + &
-                (i-1)*numDimensions + 1
-
-            
-            !store in appropriate indices
-            query(index) = Xgridnew(i,j,k,nbl)
-            query(index+1) = Ygridnew(i,j,k,nbl)
-            query(index+2) = Zgridnew(i,j,k,nbl)
-            
-            END DO
-        END DO
-    END DO
-END DO
-
-!***************************************call searching of KD tree******************************************
-
-CALL search_funct(coordinates, numDimensions, numQuerys, query, results, numResults, rootIdx, mltip &
-    , gindices, dists) 	
+!ALLOCATE(query(numQuerys*numDimensions))
+!ALLOCATE(gindices(numQuerys*numResults))
+!ALLOCATE(dists(numQuerys*numResults))
+!
+!DO nbl = 1, nblocksnew
+!    DO k = 1, NKnew(nbl)
+!        DO j = 1, NJnew(nbl)
+!            DO i = 1, NInew(nbl)
+!            
+!            ! Get the current index
+!            index = (nbl-1)*NInew(nbl)*NJnew(nbl)*NKnew(nbl)*numDimensions + &
+!                (k-1)*NInew(nbl)*NJnew(nbl)*numDimensions + &
+!                (j-1)*NInew(nbl)*numDimensions + &
+!                (i-1)*numDimensions + 1
+!
+!            
+!            !store in appropriate indices
+!            query(index) = Xgridnew(i,j,k,nbl)
+!            query(index+1) = Ygridnew(i,j,k,nbl)
+!            query(index+2) = Zgridnew(i,j,k,nbl)
+!            
+!            END DO
+!        END DO
+!    END DO
+!END DO
+!
+!!***************************************call searching of KD tree******************************************
+!
+!CALL search_funct(coordinates, numDimensions, numQuerys, query, results, numResults, rootIdx, mltip &
+!    , gindices, dists) 	
 
 !***************************************Print Result******************************************
 
@@ -267,9 +267,9 @@ interptsx = 5
 interptsy = 3
 interplace = 2
 
-!ALLOCATE(query(numQuerys*numDimensions))
-!ALLOCATE(gindices(numQuerys*numResults))
-!ALLOCATE(dists(numQuerys*numResults))
+ALLOCATE(query(numQuerys*numDimensions))
+ALLOCATE(gindices(numQuerys*numResults))
+ALLOCATE(dists(numQuerys*numResults))
 
 ALLOCATE (xstencil(interptsx,interptsy))
 ALLOCATE (ystencil(interptsx,interptsy))
@@ -288,12 +288,12 @@ ALLOCATE (jstencil(interptsy))
     DO j = 1, NJnew(nbl)
     DO i = 1, NInew(nbl)
 
-        !query(1) = xgridnew(i,j,k,nbl)
-		!query(2) = ygridnew(i,j,k,nbl)
-		!query(3) = zgridnew(i,j,k,nbl)
+        query(1) = xgridnew(i,j,k,nbl)
+		query(2) = ygridnew(i,j,k,nbl)
+		query(3) = zgridnew(i,j,k,nbl)
 
-        !CALL search_funct(coordinates, numDimensions, numQuerys, query, results &
-        !    , numResults, rootIdx, mltip, gindices, dists)
+        CALL search_funct(coordinates, numDimensions, numQuerys, query, results &
+            , numResults, rootIdx, mltip, gindices, dists)
             
         DO indexing = 1,numResults
 			convertindex = gindices(indexing)

@@ -1273,23 +1273,212 @@ __global__ void cusearchKdTreeGPU(KdNode *node, KdNode kdNodes[], const KdCoord 
     }
 }
 
-__global__ void temp(pair_coord_dist* pq, KdCoord* coords, sint* numResults, sint* dim) {
-	for(sint ind=0; ind<*numResults; ind++) {
-		for (sint i = 0; i < *dim; i++) {
-			printf("RESULTS  from device %d: %f \n", ind, coords[((pq[ind].tpl)*(*dim))+i]);
+__global__ void printResult(pair_coord_dist* pq, const sint* numResults, const KdCoord* coords, const sint* dim, float* mltip) {
+
+	printf("\n");
+	for(int i=0; i<*numResults;i++){
+		for(int j=0;j<*dim;j++){
+			printf(" %f ", coords[pq[i].tpl*(*dim)+j]/(*mltip));
+		}
+		printf("\n");
+	}
+
+}
+
+__global__ void printResultwhole(pair_coord_dist* gpq, sint* numQuerys, const sint* numResults, const KdCoord* coords, const sint* dim, float* mltip) {
+
+	for(int q=0;q<*numQuerys; q++){
+		printf("\n");
+		pair_coord_dist* pq = &gpq[q*(*numResults)];
+		for(int i=0; i<*numResults;i++){
+			for(int j=0;j<*dim;j++){
+				printf(" %f ", coords[pq[i].tpl*(*dim)+j]/(*mltip));
+			}
+			printf("\n");
 		}
 	}
+
 }
+
+__device__ void distCalc(pair_coord_dist* nd_pair, const KdCoord* query, const KdCoord* coords, const sint* dim, float* mltip) {
+
+	double dx = coords[(nd_pair->tpl)*(*dim) + 0]/(*mltip) - query[0];
+    double dy = coords[(nd_pair->tpl)*(*dim) + 1]/(*mltip) - query[1];
+    double dz = coords[(nd_pair->tpl)*(*dim) + 2]/(*mltip) - query[2];
+
+	nd_pair->dist = (dx*dx + dy*dy + dz*dz);
+
+}
+
+__device__ void insertSort(pair_coord_dist* pq, sint* counter, const sint* numResults, pair_coord_dist* nd_pair) {
+
+	if (*counter<(*numResults)) {
+		pq[*counter]=*nd_pair;
+		*counter = (*counter) +1;
+		for (int i=1; i<(*counter); i++) {
+			pair_coord_dist key = pq[i];
+			int j=i-1;
+
+			while (j >= 0 && pq[j].dist > key.dist) {
+				pq[j+1] = pq[j];
+				j=j-1;
+			}
+
+			pq[j+1] = key;
+		}
+	}
+	else if (nd_pair->dist < pq[(*numResults)-1].dist) {
+		pq[(*numResults)-1] = *nd_pair;
+		for (int i=1; i<(*numResults); i++) {
+			pair_coord_dist key = pq[i];
+			int j=i-1;
+
+			while (j >= 0 && pq[j].dist > key.dist) {
+				pq[j+1] = pq[j];
+				j=j-1;
+			}
+
+			pq[j+1] = key;
+		}
+	}
+
+}
+
+__device__ void insertInList(KdNode* node, litem** ch, const sint* dim) {
+	//litem *li = (litem*) malloc(sizeof(litem));
+	litem* li = ch[1]+1;
+	// cudaMalloc((void**)&li, sizeof(litem));
+	if((li+1)==nullptr) printf("ERRORR!!!!!\n\n");
+    
+    li->data = node;
+    li->axis = (ch[0]->axis+1)%(*dim);
+    li->next = nullptr;
+ 
+    ch[1]->next = li;
+    ch[1] = li;
+}
+
+__global__ void cuIterSearchKdTree(KdNode *root, KdNode kdNodes[], const KdCoord coords[], const KdCoord* query, const sint* numResults,
+		const sint* dim, sint* counter, float* mltip, sint* batchSize, pair_coord_dist* gpq, litem* glist, sint currBatch, sint currBatchSize) {
+
+	int tid = threadIdx.x + blockIdx.x * blockDim.x;
+	if(tid<currBatchSize) {
+		
+		tid=tid + currBatch*(*batchSize);
+		const KdCoord* qu = &query[tid*(*dim)];
+		pair_coord_dist* pq = &gpq[tid*(*numResults)];
+		litem* llist = &glist[33000*tid];
+		sint dcounter=0;
+		
+		litem *ls = llist;
+		// cudaMalloc((void**)&ls,sizeof(litem));
+		ls->data = root;
+		ls->axis=0;
+		ls->next=nullptr;
+		litem* ch[2];
+		ch[0] = ls;
+		ch[1] = ls;
+
+		//printf("%d\n", tid);
+
+		printf("Query Point %d :: %f %f %f\n", tid, qu[0], qu[1], qu[2]);
+
+		int numIter=0;
+		
+		while(ch[0]!=ch[1] || ch[0]->data==root) {
+			
+			numIter++;
+			// printf("tid: %d\n",tid);
+			//printf("%f %f %f \n", qu[0], qu[1], qu[2]);
+			pair_coord_dist nd_pair;
+
+			//printf("Assigned ndcoord\n");
+			nd_pair.tpl = ch[0]->data->tuple;
+
+			//printf("Assigned ndcoord tpl\n");
+			distCalc(&nd_pair, qu, coords, dim, mltip);
+			//printf("Calculated Distance\n");
+
+			insertSort(pq, &dcounter, numResults, &nd_pair);
+			//printf("Inserted the pair in pq\n");
+
+			double perp_ = coords[ch[0]->data->tuple*(*dim) + ch[0]->axis]/(*mltip) - qu[ch[0]->axis];
+
+			if (pow(perp_,2)<pq[dcounter-1].dist){
+
+				if (ch[0]->data->ltChild!=-1)
+				{
+					
+					//printf("Inside 1st if %d %d\n", ch[0]->data->ltChild, sizeof(kdNodes));
+					insertInList(&kdNodes[ch[0]->data->ltChild], ch, dim);
+					//printf("Exit 1st if\n");
+				}
+				
+				if (ch[0]->data->gtChild!=-1)
+				{
+					//printf("Inside 2ns if\n");
+					insertInList(&kdNodes[ch[0]->data->gtChild], ch, dim);
+					//printf("Exit 2nd if\n");
+				}
+			}
+
+			else 
+			{
+				if (perp_<0) 
+				{
+					if (ch[0]->data->gtChild!=-1)
+					{
+						//printf("Inside 3rd if\n");
+						insertInList(&kdNodes[ch[0]->data->gtChild], ch, dim);
+						//printf("Exit 3rd if\n");
+					}	
+				}
+				else 
+				{
+					if (ch[0]->data->ltChild!=-1)
+					{
+						//printf("Inside 4th if\n");
+						insertInList(&kdNodes[ch[0]->data->ltChild], ch, dim);
+						//printf("Exit 4th if\n");
+					}
+				}
+			}
+			// litem* temp = ch[0];
+			ch[0] = ch[0]->next;
+			// cudaFree(temp);
+			//printf("changed the current pointer\n");
+
+		}
+		
+		//printResult<<<1,1>>>(pq, numResults, coords, dim, mltip);
+		printf("tid: %d :::: Iter:%d :::: BatchSize %d\n\n",tid, numIter, *batchSize);
+
+
+	}
+
+
+}
+
+
 
 void Gpu::getSearchResultsGPU(pair_coord_dist** pqRefs, pair_coord_dist* pq, KdCoord* coordinates, const sint numResults,
 	const sint dim, KdCoord* results, sint numQuerys, float mltip, sint* gindices, double* dists) {
 	
 	setDevice();
-	for(int q=0; q<numQuerys; q++) {
-		checkCudaErrors(cudaMemcpy(&pq[q*numResults], pqRefs[q], sizeof(pair_coord_dist)*numResults, cudaMemcpyDeviceToHost));
-	}
 
-	checkCudaErrors(cudaDeviceSynchronize());
+	cudaEvent_t start, stop;
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
+	cudaEventRecord(start);
+	checkCudaErrors(cudaMemcpy(pq, pqRefs[0], sizeof(pair_coord_dist)*numResults*numQuerys, cudaMemcpyDeviceToHost));
+	cudaEventRecord(stop);
+	cudaEventSynchronize(stop);
+
+	float cudaMemcpySeconds = 0;
+	cudaEventElapsedTime(&cudaMemcpySeconds, start, stop);
+	cudaMemcpySeconds = cudaMemcpySeconds/1000;
+	printf("cudaMemcpy (Gpu::getSearchResultsGPU) execution time: %f s\n", cudaMemcpySeconds);
+
 
 	for(sint ind=0; ind<numResults*numQuerys; ind++) {
 		
@@ -1300,7 +1489,7 @@ void Gpu::getSearchResultsGPU(pair_coord_dist** pqRefs, pair_coord_dist* pq, KdC
 		gindices[ind] = pq[ind].tpl;
 		dists[ind] = pow(pq[ind].dist,0.5);
 	}
-
+	
 	/*
 	sint interptsx=5, interptsy=3, interplace=2;
 
@@ -1322,13 +1511,23 @@ void Gpu::searchKdTreeGPU(refIdx_t root, const KdCoord* query, const sint numRes
 	sint* d_numResults, *d_dim, *d_counter;
 	pair_coord_dist* d_pq;
 	sint counter = 0;
+	sint* d_numQuerys, *d_batchSize;
+	pair_coord_dist** d_pqRefs;
+	litem* glist;
 
 	//Allocate memory and copy the values to the pointers
 	checkCudaErrors(cudaMalloc((void **) &d_mltip, sizeof(float))); 
 	checkCudaErrors(cudaMemcpy(d_mltip, &mltip, sizeof(float), cudaMemcpyHostToDevice));
 
-	checkCudaErrors(cudaMalloc((void **) &d_query, sizeof(KdCoord)*dim)); 
-	checkCudaErrors(cudaMemcpy(d_query, query, sizeof(KdCoord)*dim, cudaMemcpyHostToDevice));
+	//checkCudaErrors(cudaMalloc((void ***) &d_pqRefs, sizeof(pair_coord_dist*)*q)); 
+	checkCudaErrors(cudaMalloc((void **) &d_pq, sizeof(pair_coord_dist)*q*numResults));
+
+	checkCudaErrors(cudaMalloc((void **) &d_numQuerys, sizeof(sint))); 
+	checkCudaErrors(cudaMemcpy(d_numQuerys, &q, sizeof(sint), cudaMemcpyHostToDevice));
+
+	checkCudaErrors(cudaMalloc((void **) &d_query, sizeof(KdCoord)*dim*q)); 
+	//checkCudaErrors(cudaMemcpy(d_query, query, sizeof(KdCoord)*dim, cudaMemcpyHostToDevice));
+	checkCudaErrors(cudaMemcpy(d_query, query, sizeof(KdCoord)*dim*q, cudaMemcpyHostToDevice));
 	
 	checkCudaErrors(cudaMalloc((void **) &d_numResults, sizeof(sint))); 
 	checkCudaErrors(cudaMemcpy(d_numResults, &numResults, sizeof(sint), cudaMemcpyHostToDevice));
@@ -1336,16 +1535,76 @@ void Gpu::searchKdTreeGPU(refIdx_t root, const KdCoord* query, const sint numRes
 	checkCudaErrors(cudaMalloc((void **) &d_dim, sizeof(sint))); 
 	checkCudaErrors(cudaMemcpy(d_dim, &dim, sizeof(sint), cudaMemcpyHostToDevice));
 	
-	checkCudaErrors(cudaMalloc((void **) &d_pq, sizeof(pair_coord_dist)*numResults));
+	//checkCudaErrors(cudaMalloc((void **) &d_pq, sizeof(pair_coord_dist)*numResults));
 	
 	checkCudaErrors(cudaMalloc((void **) &d_counter, sizeof(sint)));
 	checkCudaErrors(cudaMemcpy(d_counter, &counter, sizeof(sint), cudaMemcpyHostToDevice));
 	
-	cusearchKdTreeGPU<<< 1, 1>>>(d_kdNodes+root, d_kdNodes, d_coord, &d_query[0], d_numResults, d_dim, 0, d_pq, d_counter, d_mltip);
-	pqRefs[q] = d_pq;
+	//cusearchKdTreeGPU<<< 1, 1>>>(d_kdNodes+root, d_kdNodes, d_coord, &d_query[0], d_numResults, d_dim, 0, d_pq, d_counter, d_mltip);
+	//pqRefs[q] = d_pq;
 	//syncGPU();
+
+	// printf("SIZE: %ld bytes", 33000*q*sizeof(litem));
+	checkCudaErrors(cudaMalloc((void **) &glist, 33000*q*sizeof(litem)));
+	// printf("MEMORY ALLOCATED\n");
+
+
+	cudaEvent_t start, stop;
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
+
+	checkCudaErrors(cudaDeviceSynchronize());
+
+	cudaEventRecord(start);
+
+	sint batchSize=2000;
+	sint totalBatches = int(q/batchSize);
+	printf("Total Batched: %d\n\n", totalBatches);
+	sint remainingPoints = q%batchSize;
+
+	checkCudaErrors(cudaMalloc((void **) &d_batchSize, sizeof(sint))); 
+	checkCudaErrors(cudaMemcpy(d_batchSize, &batchSize, sizeof(sint), cudaMemcpyHostToDevice));
+
+	for(int i=0; i<totalBatches; i++) {
+		cuIterSearchKdTree<<<16,512>>>(d_kdNodes+root, d_kdNodes, d_coord, d_query, d_numResults, d_dim, d_counter, d_mltip, d_batchSize, d_pq, glist, i, batchSize);
+	}
+
+	if(remainingPoints!=0) {
+		cuIterSearchKdTree<<<16,512>>>(d_kdNodes+root, d_kdNodes, d_coord, d_query, d_numResults, d_dim, d_counter, d_mltip, d_batchSize, d_pq, glist, totalBatches, remainingPoints);
+	}
+
+	cudaFree(glist);
+	cudaEventRecord(stop);
+	cudaEventSynchronize(stop);
+	float searchSeconds = 0;
+	cudaEventElapsedTime(&searchSeconds, start, stop);
+	searchSeconds = searchSeconds/1000;
+	
+	printf("SIZE: %ld bytes\n", 33000*q*sizeof(litem));
+	//checkCudaErrors(cudaDeviceSynchronize());
+
+	//checkCudaErrors(cudaDeviceSynchronize());
+
+	// cudaEventRecord(start);
+	//printResultwhole<<<1,1>>>(d_pq, d_numQuerys, d_numResults, d_coord, d_dim, d_mltip);
 	checkCudaErrors(cudaDeviceSynchronize());
 	
+	// cudaEventRecord(stop);
+	// cudaEventSynchronize(stop);
+	// float printSeconds;
+	// cudaEventElapsedTime(&printSeconds, start, stop);
+	// printSeconds = printSeconds/1000;
+	// printf("cuIterSearchKdTree Kernel execution time: %f s\n", searchSeconds);
+	// printf("printResultwhole Kernel execution time: %f s\n", printSeconds);
+
+
+	cudaEventDestroy(start);
+	cudaEventDestroy(stop);
+	//checkCudaErrors(cudaDeviceSynchronize());
+	pqRefs[0] = d_pq;
+
+	//checkCudaErrors(cudaMemcpy(pqRefs, d_pqRefs, sizeof(pair_coord_dist*)*q, cudaMemcpyDeviceToHost));
+
 	//temp<<<1,1>>>(pqRefs[q], d_coord, d_numResults, d_dim);
 }
 
@@ -1353,10 +1612,11 @@ void Gpu::searchKdTreeGPU(refIdx_t root, const KdCoord* query, const sint numRes
 void Gpu::searchKdTree(KdCoord* coordinates, refIdx_t root, const KdCoord* query, const sint numResults, 
 	const sint dim, KdCoord* results, sint numQuerys, pair_coord_dist** pqRefs, float mltip) {
 
+	gpus[0]->searchKdTreeGPU(root, query, numResults, dim, pqRefs, numQuerys, mltip);		
 //#pragma acc parallel loop	
-	for(int q=0; q<numQuerys; q++) {
-		gpus[0]->searchKdTreeGPU(root, &query[q*dim], numResults, dim, pqRefs, q, mltip);
-	};
+//	for(int q=0; q<numQuerys; q++) {
+//		gpus[0]->searchKdTreeGPU(root, &query[q*dim], numResults, dim, pqRefs, q, mltip);
+//	};
 }
 
 void Gpu::getSearchResults(pair_coord_dist** pqRefs, KdCoord* coordinates, const sint numResults,
