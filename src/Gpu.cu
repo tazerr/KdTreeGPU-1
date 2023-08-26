@@ -1285,15 +1285,17 @@ __global__ void printResult(pair_coord_dist* pq, const sint* numResults, const K
 
 }
 
-__global__ void printResultwhole(pair_coord_dist* gpq, sint* numQuerys, const sint* numResults, const KdCoord* coords, const sint* dim, float* mltip) {
+__global__ void printResultwhole(pair_coord_dist* gpq, sint* numQuerys, const sint* numResults, const KdCoord* coords, const sint* dim, float* mltip, const KdCoord* query) {
 
 	for(int q=0;q<*numQuerys; q++){
 		printf("\n");
+		printf("Query: %f %f %f \n", query[q*(*dim)], query[q*(*dim)+1], query[q*(*dim)+2]);
 		pair_coord_dist* pq = &gpq[q*(*numResults)];
 		for(int i=0; i<*numResults;i++){
 			for(int j=0;j<*dim;j++){
 				printf(" %f ", coords[pq[i].tpl*(*dim)+j]/(*mltip));
 			}
+			printf(":::dists: %lf, gInd: %d", pow(pq[i].dist,0.5), pq[i].tpl);
 			printf("\n");
 		}
 	}
@@ -1352,14 +1354,14 @@ __device__ void insertInList(KdNode* node, litem** ch, const sint* dim) {
     
     li->data = node;
     li->axis = (ch[0]->axis+1)%(*dim);
-    li->next = nullptr;
+    // li->next = nullptr;
  
-    ch[1]->next = li;
+    // ch[1]->next = li;
     ch[1] = li;
 }
 
 __global__ void cuIterSearchKdTree(KdNode *root, KdNode kdNodes[], const KdCoord coords[], const KdCoord* query, const sint* numResults,
-		const sint* dim, sint* counter, float* mltip, sint* batchSize, pair_coord_dist* gpq, litem* glist, sint currBatch, sint currBatchSize) {
+		const sint* dim, sint* counter, float* mltip, sint* batchSize, pair_coord_dist* gpq, litem* glist, sint currBatch, sint currBatchSize, sint sizeOfList) {
 
 	int tid = threadIdx.x + blockIdx.x * blockDim.x;
 	if(tid<currBatchSize) {
@@ -1367,29 +1369,28 @@ __global__ void cuIterSearchKdTree(KdNode *root, KdNode kdNodes[], const KdCoord
 		tid=tid + currBatch*(*batchSize);
 		const KdCoord* qu = &query[tid*(*dim)];
 		pair_coord_dist* pq = &gpq[tid*(*numResults)];
-		litem* llist = &glist[33000*tid];
+		litem* llist = &glist[sizeOfList*(tid-currBatch*(*batchSize))];
 		sint dcounter=0;
 		
 		litem *ls = llist;
 		// cudaMalloc((void**)&ls,sizeof(litem));
 		ls->data = root;
 		ls->axis=0;
-		ls->next=nullptr;
+		// ls->next=nullptr;
 		litem* ch[2];
 		ch[0] = ls;
 		ch[1] = ls;
 
 		//printf("%d\n", tid);
 
-		printf("Query Point %d :: %f %f %f\n", tid, qu[0], qu[1], qu[2]);
+		printf("Query Point %d :: %f %f %f, SOL: %d\n", tid, qu[0], qu[1], qu[2], sizeOfList);
 
 		int numIter=0;
 		
 		while(ch[0]!=ch[1] || ch[0]->data==root) {
 			
 			numIter++;
-			// printf("tid: %d\n",tid);
-			//printf("%f %f %f \n", qu[0], qu[1], qu[2]);
+			// printf("%d\n", numIter);
 			pair_coord_dist nd_pair;
 
 			//printf("Assigned ndcoord\n");
@@ -1444,7 +1445,9 @@ __global__ void cuIterSearchKdTree(KdNode *root, KdNode kdNodes[], const KdCoord
 				}
 			}
 			// litem* temp = ch[0];
-			ch[0] = ch[0]->next;
+			// ch[0] = ch[0]->next;
+
+			ch[0] = ch[0]+1;
 			// cudaFree(temp);
 			//printf("changed the current pointer\n");
 
@@ -1452,10 +1455,10 @@ __global__ void cuIterSearchKdTree(KdNode *root, KdNode kdNodes[], const KdCoord
 		
 		//printResult<<<1,1>>>(pq, numResults, coords, dim, mltip);
 		printf("tid: %d :::: Iter:%d :::: BatchSize %d\n\n",tid, numIter, *batchSize);
+		// printResult<<<1,1>>>(pq, numResults, coords, dim, mltip);
 
 
 	}
-
 
 }
 
@@ -1488,7 +1491,39 @@ void Gpu::getSearchResultsGPU(pair_coord_dist** pqRefs, pair_coord_dist* pq, KdC
 
 		gindices[ind] = pq[ind].tpl;
 		dists[ind] = pow(pq[ind].dist,0.5);
+
+		// printf("gindi: %d dists: %f\n", gindices[ind], pq[ind].dist);
 	}
+	
+	// double uinter[numQuerys], vinter[numQuerys];
+	// double totalwt;
+
+	// for(sint n=0; n<numQuerys; n++) {
+	// 	uinter[n]=0;
+	// 	vinter[n]=0;
+	// 	totalwt=0;
+
+	// 	for(sint i=0; i<numResults; i++) {
+	// 		totalwt = (1.0/(dists[n*numQuerys+i])^2)+ totalwt;
+	// 		uinter[n] = uinter[n] + u[gindices[n*numQuerys+i]/dists[n*numQuerys+i]^2];
+	// 		vinter[n] = vinter[n] + v[gindices[n*numQuerys+i]/dists[n*numQuerys+i]^2];
+
+	// 	}
+
+	// 	uinter[n] = uinter[n]/totalwt;
+	// 	vinter[n] = vinter[n]/totalwt;
+
+	// }
+
+	// double uerror[numQuerys], verror[numQuerys];
+
+	// for(sint n=0; n<numQuerys; n++) {
+	// 	uerror[n] = abs(uinter[n] - ( pow(query[n],2)+pow(query[n+1],2)+pow(query[n+2],2)));
+	// 	verror[n] = abs(vinter[n] - (sin(query[n])*cos(pow(query[n+1],2))*sin(query[n+2])));
+	// }
+
+	//print out max-min values of error of both u and v
+	
 	
 	/*
 	sint interptsx=5, interptsy=3, interplace=2;
@@ -1501,6 +1536,7 @@ void Gpu::getSearchResultsGPU(pair_coord_dist** pqRefs, pair_coord_dist* pq, KdC
 	checkCudaErrors(cudaMalloc((void**) &jstencil, sizeof(double)*interptsy));
 	*/
 }
+
 
 void Gpu::searchKdTreeGPU(refIdx_t root, const KdCoord* query, const sint numResults, const sint dim, pair_coord_dist**pqRefs, int q, float mltip) {
 	setDevice();
@@ -1545,7 +1581,10 @@ void Gpu::searchKdTreeGPU(refIdx_t root, const KdCoord* query, const sint numRes
 	//syncGPU();
 
 	// printf("SIZE: %ld bytes", 33000*q*sizeof(litem));
-	checkCudaErrors(cudaMalloc((void **) &glist, 33000*q*sizeof(litem)));
+	sint batchSize=1;
+	sint sizeOfList=17000000;
+	checkCudaErrors(cudaMalloc((void **) &glist, sizeOfList*batchSize*sizeof(litem)));
+	checkCudaErrors(cudaDeviceSynchronize());
 	// printf("MEMORY ALLOCATED\n");
 
 
@@ -1553,24 +1592,27 @@ void Gpu::searchKdTreeGPU(refIdx_t root, const KdCoord* query, const sint numRes
 	cudaEventCreate(&start);
 	cudaEventCreate(&stop);
 
-	checkCudaErrors(cudaDeviceSynchronize());
-
 	cudaEventRecord(start);
 
-	sint batchSize=2000;
+	
 	sint totalBatches = int(q/batchSize);
-	printf("Total Batched: %d\n\n", totalBatches);
+	printf("Total Batches: %d\n\n", totalBatches);
 	sint remainingPoints = q%batchSize;
+	printf("Total remainingPoints: %d\n\n", remainingPoints);
 
 	checkCudaErrors(cudaMalloc((void **) &d_batchSize, sizeof(sint))); 
 	checkCudaErrors(cudaMemcpy(d_batchSize, &batchSize, sizeof(sint), cudaMemcpyHostToDevice));
 
+	checkCudaErrors(cudaDeviceSynchronize());
+
 	for(int i=0; i<totalBatches; i++) {
-		cuIterSearchKdTree<<<16,512>>>(d_kdNodes+root, d_kdNodes, d_coord, d_query, d_numResults, d_dim, d_counter, d_mltip, d_batchSize, d_pq, glist, i, batchSize);
+		
+		cuIterSearchKdTree<<<16,512>>>(d_kdNodes+root, d_kdNodes, d_coord, d_query, d_numResults, d_dim, d_counter, d_mltip, d_batchSize, d_pq, glist, i, batchSize, sizeOfList);
+		checkCudaErrors(cudaDeviceSynchronize());
 	}
 
 	if(remainingPoints!=0) {
-		cuIterSearchKdTree<<<16,512>>>(d_kdNodes+root, d_kdNodes, d_coord, d_query, d_numResults, d_dim, d_counter, d_mltip, d_batchSize, d_pq, glist, totalBatches, remainingPoints);
+		cuIterSearchKdTree<<<16,512>>>(d_kdNodes+root, d_kdNodes, d_coord, d_query, d_numResults, d_dim, d_counter, d_mltip, d_batchSize, d_pq, glist, totalBatches, remainingPoints, sizeOfList);
 	}
 
 	cudaFree(glist);
@@ -1580,7 +1622,7 @@ void Gpu::searchKdTreeGPU(refIdx_t root, const KdCoord* query, const sint numRes
 	cudaEventElapsedTime(&searchSeconds, start, stop);
 	searchSeconds = searchSeconds/1000;
 	
-	printf("SIZE: %ld bytes\n", 33000*q*sizeof(litem));
+	// printf("SIZE: %ld bytes\n", 33000*q*sizeof(litem));
 	//checkCudaErrors(cudaDeviceSynchronize());
 
 	//checkCudaErrors(cudaDeviceSynchronize());
@@ -1602,6 +1644,8 @@ void Gpu::searchKdTreeGPU(refIdx_t root, const KdCoord* query, const sint numRes
 	cudaEventDestroy(stop);
 	//checkCudaErrors(cudaDeviceSynchronize());
 	pqRefs[0] = d_pq;
+
+	printResultwhole<<<1,1>>>(d_pq, d_numQuerys, d_numResults, d_coord, d_dim, d_mltip, d_query);
 
 	//checkCudaErrors(cudaMemcpy(pqRefs, d_pqRefs, sizeof(pair_coord_dist*)*q, cudaMemcpyDeviceToHost));
 
@@ -1626,3 +1670,83 @@ void Gpu::getSearchResults(pair_coord_dist** pqRefs, KdCoord* coordinates, const
 		gpus[0]->getSearchResultsGPU(pqRefs, pq, coordinates, numResults, dim, results, numQuerys, mltip, gindices, dists);
 
 	}
+
+void Gpu::interpolation(KdCoord* coordinates, sint numPoints, sint numDimensions, sint numQuerys, KdCoord* query, sint numResults, sint* gindices, double* dists, float mltip) {
+
+
+	//double u[numPoints];
+	//double v[numPoints];
+
+	double u[numQuerys*numResults];
+	double v[numQuerys*numResults];
+
+	for(sint n=0; n<numQuerys; n++) {
+		for(sint i=0; i<numResults; i++) {
+			u[n*numResults+i] = pow(coordinates[gindices[n*numResults+i]*numDimensions]/mltip,2)+pow(coordinates[gindices[n*numResults+i]*numDimensions+1]/mltip,2)+pow(coordinates[gindices[n*numResults+i]*numDimensions+2]/mltip,2);
+			v[n*numResults+i] = sin(coordinates[gindices[n*numResults+i]*numDimensions]/mltip)*cos(pow(coordinates[gindices[n*numResults+i]*numDimensions+1]/mltip,2))*sin(coordinates[gindices[n*numResults+i]*numDimensions+2]/mltip);
+		}
+	}
+
+	// for(int i=0; i<numPoints; i++) {
+	// 	u[i] = pow(coordinates[i*numDimensions]/mltip,2)+pow(coordinates[i*numDimensions+1]/mltip,2)+pow(coordinates[i*numDimensions+2]/mltip,2);
+	// 	v[i] = sin(coordinates[i*numDimensions]/mltip)*cos(pow(coordinates[i*numDimensions+1]/mltip,2))*sin(coordinates[i*numDimensions+2]/mltip);
+	// 	// printf("u: %lf, v: %fl\n", u[i], v[i]);
+	// }
+
+	double uinter[numQuerys], vinter[numQuerys];
+	double totalwt;
+
+	for(sint n=0; n<numQuerys; n++) {
+		uinter[n]=0;
+		vinter[n]=0;
+		totalwt=0;
+
+		printf("\n");
+
+		printf("Query: %f  %f %f \n", query[n*numDimensions],query[n*numDimensions+1], query[n*numDimensions+2]);
+
+		for(sint i=0; i<numResults; i++) {
+			totalwt = 1/(pow(dists[n*numResults+i],2)) + totalwt;
+			
+			// uinter[n]=uinter[n]+u[(gindices[n*numResults+i])]/pow(dists[n*numResults+i],2);
+			// vinter[n]=vinter[n]+v[(gindices[n*numResults+i])]/pow(dists[n*numResults+i],2);
+
+			uinter[n]=uinter[n]+u[n*numResults+i]/pow(dists[n*numResults+i],2);
+			vinter[n]=vinter[n]+v[n*numResults+i]/pow(dists[n*numResults+i],2);
+
+			printf("NearestNeigbour(%d) with gInd %d: x:%f y:%f z:%f, u:%lf, v:%lf \n", i, gindices[n*numResults+i], coordinates[gindices[n*numResults+i]*numDimensions]/mltip, coordinates[gindices[n*numResults+i]*numDimensions+1]/mltip, coordinates[gindices[n*numResults+i]*numDimensions+2]/mltip, u[n*numResults+i], v[n*numResults+i]);
+
+		}
+
+		uinter[n] = uinter[n]/totalwt;
+		vinter[n] = vinter[n]/totalwt;
+
+		printf("totalwt: %lf, uinter: %lf, vinter: %lf\n", totalwt, uinter[n], vinter[n]);
+
+	}
+
+	float uerror[numQuerys], verror[numQuerys];
+
+	for(sint n=0; n<numQuerys; n++) {
+		uerror[n] = abs(uinter[n] - (pow(query[n*numDimensions],2)+pow(query[n*numDimensions+1],2)+pow(query[n*numDimensions+2],2)));
+		verror[n] = abs(vinter[n] - (sin(query[n*numDimensions])*cos(pow(query[n*numDimensions+1],2))*sin(query[n*numDimensions+2])));
+	}
+	double maxu, maxv, minu, minv;
+	for(sint n=0; n<numQuerys; n++) {
+		if(n==0) {
+			maxu=uerror[n];
+			minu=uerror[n];
+			maxv=verror[n];
+			minv=verror[n];
+		}
+
+		if(uerror[n]>maxu) maxu=uerror[n];
+		if(verror[n]>maxv) maxv=verror[n];
+		if(uerror[n]<minu) minu=uerror[n];
+		if(verror[n]<minv) minv=verror[n];
+		// printf("\nuerror[%d] = %lf\n", n, uerror[n]);
+		// printf("verror[%d] = %lf\n", n, verror[n]);
+	}
+
+	printf("maxu: %lf, maxv: %lf, minu: %lf, minv: %lf", maxu, maxv, minu, minv);
+}

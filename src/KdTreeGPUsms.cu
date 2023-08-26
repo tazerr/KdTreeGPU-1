@@ -477,9 +477,9 @@ void cinsertInList(KdNode* node, litem** ch, const sint* dim) {
     
     li->data = node;
     li->axis = (ch[0]->axis+1)%(*dim);
-    li->next = nullptr;
+    // li->next = nullptr;
  
-    ch[1]->next = li;
+    // ch[1]->next = li;
     ch[1] = li;
 }
 
@@ -498,7 +498,7 @@ void cIterSearchKdTree(KdNode *root, KdNode kdNodes[], const KdCoord coords[], c
 			ls = (litem*)malloc(sizeof(litem));
 			ls->data = root;
 			ls->axis=0;
-			ls->next=nullptr;
+			// ls->next=nullptr;
 			litem* ch[2];
 			ch[0] = ls;
 			ch[1] = ls;
@@ -574,7 +574,7 @@ void cIterSearchKdTree(KdNode *root, KdNode kdNodes[], const KdCoord coords[], c
 					}
 				}
 				litem* temp = ch[0];
-				ch[0] = ch[0]->next;
+				// ch[0] = ch[0]->next;
 				free(temp);
 				//printf("changed the current pointer\n");
 
@@ -738,17 +738,18 @@ void search_funct( KdCoord* coordinates, sint numPoints, sint numDimensions, sin
 
 	TIMER_START();
 	// SEARCH FOR Nearest Neighbour
-	pair_coord_dist* pqRefs[numQuerys];
+	pair_coord_dist* pqRefs[1];
 	Gpu::searchKdTree(coordinates, rootIdx, query, numResults, numDimensions, results, numQuerys, pqRefs, mltip);
 	TIMER_STOP(double searchTime);
 	cout << "Total Search Time = " << searchTime << endl;
 
-	// TIMER_START();
-	// Gpu::getSearchResults(pqRefs, coordinates, numResults, numDimensions, results, numQuerys, mltip, gindices, dists);
-	// TIMER_STOP(double getSearchResultsTime);
-	// printf("Total time taken to get the results back cudaMemcpy (including cudaMemcpy (Gpu::getSearchResultsGPU) time): %f s\n", getSearchResultsTime);
+	TIMER_START();
+	Gpu::getSearchResults(pqRefs, coordinates, numResults, numDimensions, results, numQuerys, mltip, gindices, dists);
+	TIMER_STOP(double getSearchResultsTime);
+	printf("Total time taken to get the results back cudaMemcpy (including cudaMemcpy (Gpu::getSearchResultsGPU) time): %f s\n", getSearchResultsTime);
 	
-
+	// cout << "HERE " << numPoints<<endl;
+	Gpu::interpolation(coordinates, numPoints, numDimensions, numQuerys, query, numResults, gindices, dists, mltip);
 	
 	
 }

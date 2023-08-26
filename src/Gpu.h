@@ -54,7 +54,7 @@ struct pair_coord_dist {
 
 struct litem {
 	KdNode* data;
-	litem* next;
+	// litem* next;
     int axis;
 };
 
@@ -89,6 +89,8 @@ public:
 	static void  	searchKdTree(KdCoord* coordinates, refIdx_t root, const KdCoord* query, const sint numResults, const sint dim, KdCoord* results, sint numQuerys, pair_coord_dist** pqRefs, float mltip);
 	static void  	getSearchResults(pair_coord_dist** pqRefs, KdCoord* coordinates, const sint numResults, const sint dim, 
 					KdCoord* results, sint numQuerys, float mltip, sint* gindices, double* dists);
+	static void interpolation(KdCoord* coordinates, sint numPoints, sint numDimensions, sint numQuerys, KdCoord* query, sint numResults, sint* gindices, double* dists,float mltip);
+	
 	static int      getNumThreads() {
 		if (numGPUs==2) {
 			if  (gpus[0] == NULL || gpus[1] == NULL) return 0;
