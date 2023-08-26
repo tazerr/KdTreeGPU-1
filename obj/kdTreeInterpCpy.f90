@@ -92,9 +92,9 @@ ALLOCATE(NJ(nblocks))
 ALLOCATE(NK(nblocks)) 
  
 nbl =1
-NI(nbl) = 256
-NJ(nbl) = 256
-NK(nbl) = 256
+NI(nbl) = 128*2
+NJ(nbl) = 128
+NK(nbl) = 128*2
 
 NImax = maxval(NI)
 NJmax = maxval(NJ)
@@ -113,9 +113,9 @@ DO nbl = 1,nblocks
         DO j = 1,NJ(nbl)
             DO i = 1,NI(nbl)
 
-        Xgrid(i,j,k,nbl) = i !-6.d0 + (Lx/(NI(nbl)-1.d0)) * ((i-1.d0) + sin(6.d0*3.14d0*(j-1)*(1.d0/(NJ(nbl)-1))))
-        Ygrid(i,j,k,nbl) = j !-6.d0 + (Ly/(NJ(nbl)-1.d0)) * ((j-1.d0) + 2.d0 * sin(6.d0*3.14d0*(i-1)*(1.d0/(NI(nbl)-1))))
-        Zgrid(i,j,k,nbl) = k !Lz*(k-1.d0)
+        Xgrid(i,j,k,nbl) = -6.d0 + (Lx/(NI(nbl)-1.d0)) * ((i-1.d0) + sin(6.d0*3.14d0*(j-1)*(1.d0/(NJ(nbl)-1))))
+        Ygrid(i,j,k,nbl) = -6.d0 + (Ly/(NJ(nbl)-1.d0)) * ((j-1.d0) + 2.d0 * sin(6.d0*3.14d0*(i-1)*(1.d0/(NI(nbl)-1))))
+        Zgrid(i,j,k,nbl) = Lz*(k-1.d0)
 		
 		Igrid(i,j,k,nbl) = 1.d0 * i
 		Jgrid(i,j,k,nbl) = 1.d0 * j
@@ -152,9 +152,9 @@ ALLOCATE(NJnew(nblocksnew))
 ALLOCATE(NKnew(nblocksnew))
  
 nbl =1
-NInew(nbl) = 51
-NJnew(nbl) = 51
-NKnew(nbl) = 1
+NInew(nbl) = 5
+NJnew(nbl) = 5
+NKnew(nbl) = 5
    	
 NImaxnew = maxval(NInew)
 NJmaxnew = maxval(NJnew)
@@ -173,9 +173,9 @@ DO nbl = 1,nblocksnew
 		DO j = 1,NJnew(nbl)
             DO i = 1,NInew(nbl)
 
-        Xgridnew(i,j,k,nbl) = i !-3.d0 + Lx*(i-1.d0)/(NInew(nbl)-1.d0)
-        Ygridnew(i,j,k,nbl) = j !-3.d0 + Ly*(j-1.d0)/(NJnew(nbl)-1.d0)
-        Zgridnew(i,j,k,nbl) = k !Lz*(k-1.d0)
+        Xgridnew(i,j,k,nbl) = -3.d0 + Lx*(i-1.d0)/(NInew(nbl)-1.d0)
+        Ygridnew(i,j,k,nbl) = -3.d0 + Ly*(j-1.d0)/(NJnew(nbl)-1.d0)
+        Zgridnew(i,j,k,nbl) = Lz*(k-1.d0)
 
             END DO
 		END DO
@@ -188,7 +188,7 @@ numDimensions=3
 numPoints = size(xgrid)
 sizeOfarray = numPoints*numDimensions
 numQuerys = size(Xgridnew)
-numResults = 10
+numResults = 8
 ALLOCATE(results(numResults*numDimensions*numQuerys))
 
 ALLOCATE(coordinates(sizeOfarray))
