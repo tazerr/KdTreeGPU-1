@@ -89,7 +89,7 @@ public:
 	static void  	searchKdTree(KdCoord* coordinates, refIdx_t root, const KdCoord* query, const sint numResults, const sint dim, KdCoord* results, sint numQuerys, pair_coord_dist** pqRefs, float mltip);
 	static void  	getSearchResults(pair_coord_dist** pqRefs, KdCoord* coordinates, const sint numResults, const sint dim, 
 					KdCoord* results, sint numQuerys, float mltip, sint* gindices, double* dists);
-	static void interpolation(KdCoord* coordinates, sint numPoints, sint numDimensions, sint numQuerys, KdCoord* query, sint numResults, sint* gindices, double* dists,float mltip);
+	static void interpolation(KdCoord* coordinates, sint numPoints, sint numDimensions, sint numQuerys, KdCoord* query, sint numResults, sint* gindices, double* dists,float mltip, double* u, double* v, double* uinter, double* vinter);
 	
 	static int      getNumThreads() {
 		if (numGPUs==2) {

@@ -1581,8 +1581,8 @@ void Gpu::searchKdTreeGPU(refIdx_t root, const KdCoord* query, const sint numRes
 	//syncGPU();
 
 	// printf("SIZE: %ld bytes", 33000*q*sizeof(litem));
-	sint batchSize=1;
-	sint sizeOfList=17000000;
+	sint batchSize=10;
+	sint sizeOfList=1700000;
 	checkCudaErrors(cudaMalloc((void **) &glist, sizeOfList*batchSize*sizeof(litem)));
 	checkCudaErrors(cudaDeviceSynchronize());
 	// printf("MEMORY ALLOCATED\n");
@@ -1671,29 +1671,29 @@ void Gpu::getSearchResults(pair_coord_dist** pqRefs, KdCoord* coordinates, const
 
 	}
 
-void Gpu::interpolation(KdCoord* coordinates, sint numPoints, sint numDimensions, sint numQuerys, KdCoord* query, sint numResults, sint* gindices, double* dists, float mltip) {
+void Gpu::interpolation(KdCoord* coordinates, sint numPoints, sint numDimensions, sint numQuerys, KdCoord* query, sint numResults, sint* gindices, double* dists, float mltip, double* u, double* v, double* uinter, double* vinter) {
 
 
-	//double u[numPoints];
-	//double v[numPoints];
+	// double u[numPoints];
+	// double v[numPoints];
 
-	double u[numQuerys*numResults];
-	double v[numQuerys*numResults];
+	// double u[numQuerys*numResults];
+	// double v[numQuerys*numResults];
 
-	for(sint n=0; n<numQuerys; n++) {
-		for(sint i=0; i<numResults; i++) {
-			u[n*numResults+i] = pow(coordinates[gindices[n*numResults+i]*numDimensions]/mltip,2)+pow(coordinates[gindices[n*numResults+i]*numDimensions+1]/mltip,2)+pow(coordinates[gindices[n*numResults+i]*numDimensions+2]/mltip,2);
-			v[n*numResults+i] = sin(coordinates[gindices[n*numResults+i]*numDimensions]/mltip)*cos(pow(coordinates[gindices[n*numResults+i]*numDimensions+1]/mltip,2))*sin(coordinates[gindices[n*numResults+i]*numDimensions+2]/mltip);
-		}
-	}
-
-	// for(int i=0; i<numPoints; i++) {
-	// 	u[i] = pow(coordinates[i*numDimensions]/mltip,2)+pow(coordinates[i*numDimensions+1]/mltip,2)+pow(coordinates[i*numDimensions+2]/mltip,2);
-	// 	v[i] = sin(coordinates[i*numDimensions]/mltip)*cos(pow(coordinates[i*numDimensions+1]/mltip,2))*sin(coordinates[i*numDimensions+2]/mltip);
-	// 	// printf("u: %lf, v: %fl\n", u[i], v[i]);
+	// for(sint n=0; n<numQuerys; n++) {
+	// 	for(sint i=0; i<numResults; i++) {
+	// 		u[n*numResults+i] = pow(coordinates[gindices[n*numResults+i]*numDimensions]/mltip,2)+pow(coordinates[gindices[n*numResults+i]*numDimensions+1]/mltip,2)+pow(coordinates[gindices[n*numResults+i]*numDimensions+2]/mltip,2);
+	// 		v[n*numResults+i] = sin(coordinates[gindices[n*numResults+i]*numDimensions]/mltip)*cos(pow(coordinates[gindices[n*numResults+i]*numDimensions+1]/mltip,2))*sin(coordinates[gindices[n*numResults+i]*numDimensions+2]/mltip);
+	// 	}
 	// }
 
-	double uinter[numQuerys], vinter[numQuerys];
+	for(int i=0; i<numPoints; i++) {
+		u[i] = pow(coordinates[i*numDimensions]/mltip,2)+pow(coordinates[i*numDimensions+1]/mltip,2);//+pow(coordinates[i*numDimensions+2]/mltip,2);
+		v[i] = sin(coordinates[i*numDimensions]/mltip)*cos(pow(coordinates[i*numDimensions+1]/mltip,2));//*sin(coordinates[i*numDimensions+2]/mltip);
+		// printf("u: %lf, v: %fl\n", u[i], v[i]);
+	}
+
+	// double uinter[numQuerys], vinter[numQuerys];
 	double totalwt;
 
 	for(sint n=0; n<numQuerys; n++) {
@@ -1708,11 +1708,11 @@ void Gpu::interpolation(KdCoord* coordinates, sint numPoints, sint numDimensions
 		for(sint i=0; i<numResults; i++) {
 			totalwt = 1/(pow(dists[n*numResults+i],2)) + totalwt;
 			
-			// uinter[n]=uinter[n]+u[(gindices[n*numResults+i])]/pow(dists[n*numResults+i],2);
-			// vinter[n]=vinter[n]+v[(gindices[n*numResults+i])]/pow(dists[n*numResults+i],2);
+			uinter[n]=uinter[n]+u[(gindices[n*numResults+i])]/pow(dists[n*numResults+i],2);
+			vinter[n]=vinter[n]+v[(gindices[n*numResults+i])]/pow(dists[n*numResults+i],2);
 
-			uinter[n]=uinter[n]+u[n*numResults+i]/pow(dists[n*numResults+i],2);
-			vinter[n]=vinter[n]+v[n*numResults+i]/pow(dists[n*numResults+i],2);
+			// uinter[n]=uinter[n]+u[n*numResults+i]/pow(dists[n*numResults+i],2);
+			// vinter[n]=vinter[n]+v[n*numResults+i]/pow(dists[n*numResults+i],2);
 
 			printf("NearestNeigbour(%d) with gInd %d: x:%f y:%f z:%f, u:%lf, v:%lf \n", i, gindices[n*numResults+i], coordinates[gindices[n*numResults+i]*numDimensions]/mltip, coordinates[gindices[n*numResults+i]*numDimensions+1]/mltip, coordinates[gindices[n*numResults+i]*numDimensions+2]/mltip, u[n*numResults+i], v[n*numResults+i]);
 

@@ -713,7 +713,8 @@ void custom_funct( KdCoord* coordinates, sint numPoints, sint numQuerys, KdCoord
 
 //Declaration for the custom function so that it can be called by fortran
 extern "C" {
-    void search_funct(KdCoord* coordinates, sint numPoints, sint numDimensions, sint numQuerys, KdCoord* query, KdCoord* results, sint numResults, sint rootIdx, float mltip, sint* gindices, double* dists);
+    void search_funct(KdCoord* coordinates, sint numPoints, sint numDimensions, sint numQuerys, KdCoord* query, KdCoord* results, sint numResults, sint rootIdx,
+		 float mltip, sint* gindices, double* dists, double* u, double* v, double* uinterp, double* vinterp);
 }
 
 /*
@@ -724,7 +725,8 @@ extern "C" {
  * 
  * 
 */
-void search_funct( KdCoord* coordinates, sint numPoints, sint numDimensions, sint numQuerys, KdCoord* query, KdCoord* results, sint numResults, sint rootIdx, float mltip, sint* gindices, double* dists)
+void search_funct( KdCoord* coordinates, sint numPoints, sint numDimensions, sint numQuerys, KdCoord* query, KdCoord* results, sint numResults, sint rootIdx, 
+	float mltip, sint* gindices, double* dists, double* u, double* v, double* uinter, double* vinter)
 {
 	// rootIdx stores the index of the root node on the kdnodes array
 	// this value is later passed to the searchKdTree function  
@@ -749,7 +751,21 @@ void search_funct( KdCoord* coordinates, sint numPoints, sint numDimensions, sin
 	printf("Total time taken to get the results back cudaMemcpy (including cudaMemcpy (Gpu::getSearchResultsGPU) time): %f s\n", getSearchResultsTime);
 	
 	// cout << "HERE " << numPoints<<endl;
-	Gpu::interpolation(coordinates, numPoints, numDimensions, numQuerys, query, numResults, gindices, dists, mltip);
+	Gpu::interpolation(coordinates, numPoints, numDimensions, numQuerys, query, numResults, gindices, dists, mltip, u, v, uinter, vinter);
 	
 	
+}
+
+extern "C" {
+    void temp_funct(double* tarry, int tx, int ty, int tz);
+}
+
+void temp_funct(double* tarry, int tx, int ty, int tz) {
+	for(int k=0; k<tz; k++) {
+		for(int j=0; j<ty; j++) {
+			for(int i=0; i<tx; i++){
+				tarry[k*ty*tx+j*tx+i] = (i+1)*100+(j+1)*10+(k+1);
+			}
+		}
+	}
 }
