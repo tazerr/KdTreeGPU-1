@@ -16,7 +16,7 @@ MODULE call_kd_tree
         END SUBROUTINE
 
 		SUBROUTINE search_funct(coordinates, numPoints, numDimensions, numQuerys, query, results, numResults, rootIdx &
-            , mltip, gindices, dists) bind(C, name="search_funct")
+            , mltip, gindices, dists, u, v, uinter, vinter) bind(C, name="search_funct")
             !@@$acc routine seq
             USE iso_c_binding
             REAL(c_float), dimension(*) :: coordinates
@@ -30,6 +30,18 @@ MODULE call_kd_tree
             REAL(c_float), value :: mltip
             INTEGER(c_int), dimension(*) :: gindices
             REAL(c_double), dimension(*) :: dists
+            REAL(c_double), dimension(*) :: u
+            REAL(c_double), dimension(*) :: v
+            REAL(c_double), dimension(*) :: uinter
+            REAL(c_double), dimension(*) :: vinter
+        END SUBROUTINE
+
+        SUBROUTINE temp_funct(tarry, tx, ty, tz) bind(C, name="temp_funct")
+            USE iso_c_binding
+            REAL(c_double), dimension(*) :: tarry
+            INTEGER(c_int), value :: tx
+            INTEGER(c_int), value :: ty
+            INTEGER(c_int), value :: tz
         END SUBROUTINE
     END INTERFACE
 END MODULE call_kd_tree
@@ -52,7 +64,7 @@ IMPLICIT NONE
 INTEGER(c_int) :: numPoints, numResults, rootIdx    
 INTEGER :: numDimensions 
 INTEGER :: sizeOfarray 
-REAL(c_float):: mltip=100000.0
+REAL(c_float):: mltip=100000000.0
 REAL(c_float), ALLOCATABLE :: coordinates(:), results(:)
 INTEGER, ALLOCATABLE :: gindices(:)
 REAL(c_double), ALLOCATABLE :: dists(:)
@@ -76,7 +88,28 @@ REAL, ALLOCATABLE :: Lag_weights(:,:)
 REAL iinter,jinter
 REAL dw
 real time_s, time_einter, time_esearch, time_sinter
+REAL(c_double), ALLOCATABLE :: tarry(:,:,:)
+INTEGER(c_int) :: tx,ty,tz
+REAL(c_double), ALLOCATABLE :: u(:,:,:,:), v(:,:,:,:), uinter(:,:,:,:), vinter(:,:,:,:)
 
+!!**********************************TARRY*****************************************
+!tx=3
+!ty=3
+!tz=3
+!
+!ALLOCATE(tarry(tx,ty,tz))
+!
+!call temp_funct(tarry, tx, ty,tz)
+!
+!do k=1,tz
+!    do j=1,ty
+!        do i=1,tx
+!        write(*,*) "tarry(", i, j, k, ") =", tarry(i,j,k)
+!        end do
+!    end do
+!end do 
+!
+!pause
     !**********************************Background block*****************************************
 
 
@@ -92,9 +125,9 @@ ALLOCATE(NJ(nblocks))
 ALLOCATE(NK(nblocks)) 
  
 nbl =1
-NI(nbl) = 128*2
-NJ(nbl) = 128
-NK(nbl) = 128*2
+NI(nbl) = 32
+NJ(nbl) = 32
+NK(nbl) = 32
 
 NImax = maxval(NI)
 NJmax = maxval(NJ)
@@ -152,9 +185,9 @@ ALLOCATE(NJnew(nblocksnew))
 ALLOCATE(NKnew(nblocksnew))
  
 nbl =1
-NInew(nbl) = 5
-NJnew(nbl) = 5
-NKnew(nbl) = 5
+NInew(nbl) = 2
+NJnew(nbl) = 1
+NKnew(nbl) = 1
    	
 NImaxnew = maxval(NInew)
 NJmaxnew = maxval(NJnew)
@@ -190,6 +223,12 @@ sizeOfarray = numPoints*numDimensions
 numQuerys = size(Xgridnew)
 numResults = 8
 ALLOCATE(results(numResults*numDimensions*numQuerys))
+
+ALLOCATE(u(NImax,NJmax,NKmax,nblocks))
+ALLOCATE(v(NImax,NJmax,NKmax,nblocks))
+
+ALLOCATE(uinter(NImaxnew,NJmaxnew,NKmaxnew,nblocksnew))
+ALLOCATE(vinter(NImaxnew,NJmaxnew,NKmaxnew,nblocksnew))
 
 ALLOCATE(coordinates(sizeOfarray))
 DO nbl = 1, nblocks
@@ -255,11 +294,79 @@ call cpu_time(time_s)
 CALL custom_funct(coordinates, numPoints, numQuerys, query, results, numResults, rootIdx)
 
 CALL search_funct(coordinates, numPoints, numDimensions, numQuerys, query, results, numResults, rootIdx, mltip &
-    , gindices, dists) 	
+    , gindices, dists, u, v, uinter, vinter) 	
 
 !pause
 call cpu_time(time_esearch)
 !***************************************Print Result******************************************
+open(1,file='grid.xyz',form='unformatted')
+	  
+write(1) nblocks
+write(1) ( NI(nbl),NJ(nbl), NK(nbl), nbl=1, nblocks) 
+! write(1) ( NI(nbl),NJ(nbl), nbl=1, nblocks) 
+
+DO nbl=1,nblocks
+
+write(1) (((Xgrid(i,j,k,nbl), i=1,NI(nbl)),j=1,NJ(nbl)),k=1,NK(nbl))  &
+	        ,(((Ygrid(i,j,k,nbl), i=1,NI(nbl)),j=1,NJ(nbl)),k=1,NK(nbl))  &
+	        ,(((Zgrid(i,j,k,nbl), i=1,NI(nbl)),j=1,NJ(nbl)),k=1,NK(nbl))
+ENDDO!
+close(1)
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+open(1,file='grid2.xyz',form='unformatted')
+	  
+write(1) nblocksnew
+write(1) ( NInew(nbl),NJnew(nbl), NKnew(nbl), nbl=1, nblocks) 
+!write(1) ( NInew(nbl),NJnew(nbl), nbl=1, nblocksnew) 
+
+DO nbl=1,nblocksnew
+
+write(1) (((Xgridnew(i,j,k,nbl), i=1,NInew(nbl)),j=1,NJnew(nbl)),k=1,NKnew(nbl))  &
+	        ,(((Ygridnew(i,j,k,nbl), i=1,NInew(nbl)),j=1,NJnew(nbl)),k=1,NKnew(nbl))  &
+	        ,(((Zgridnew(i,j,k,nbl), i=1,NInew(nbl)),j=1,NJnew(nbl)),k=1,NKnew(nbl))
+ENDDO!
+close(1)
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+open (7, form = 'unformatted', file = 'flow_main.xyz')
+		write(7) nblocks
+		write(7) (NI(nbl), NJ(nbl), NK(nbl),2, nbl = 1, nblocks)
+		Do nbl = 1,nblocks
+		write(7) ((( u(i,j,k,nbl), i = 1,NI(nbl)), j = 1,NJ(nbl)),k=1,NK(nbl)) 		&
+			, 		((( v(i,j,k,nbl), i = 1,NI(nbl)), j = 1,NJ(nbl)),k=1,NK(nbl)) 
+		END DO
+		close(7)
+		
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+nbl=1
+open (7, form = 'unformatted', file = 'flow_query.xyz')
+		write(7) nblocksnew
+		write(7) (NInew(nbl), NJnew(nbl), NKnew(nbl),2, nbl = 1, nblocksnew)
+		Do nbl = 1,nblocksnew
+		write(7) ((( uinter(i,j,k,nbl), i = 1,NInew(nbl)), j = 1,NJnew(nbl)),k=1,NKnew(nbl)) 		&
+			, 		((( vinter(i,j,k,nbl), i = 1,NInew(nbl)), j = 1,NJnew(nbl)),k=1,NKnew(nbl)) 
+		END DO
+		close(7)
+
+
+
+!DO nbl = 1,nblocksnew
+!    DO k = 1,NKnew(nbl)
+!		DO j = 1,NJnew(nbl)
+!            DO i = 1,NInew(nbl)
+!            write(*,*) "uinter(",i,j,k,nbl,")=", uinter(i,j,k,nbl), vinter(i,j,k,nbl)
+!
+!            END DO
+!		END DO
+!    END DO
+!END DO
+
+
+
 !DO WHILE(i<=numQuerys*numResults)
 !WRITE(*,*), gindices(i)
 !i=i+1
