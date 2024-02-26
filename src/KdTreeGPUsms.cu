@@ -312,20 +312,21 @@ void KdNode::printKdTree(KdNode kdNodes[], const KdCoord coords[], const sint di
 
 //Declaration for the custom function so that it can be called by fortran
 extern "C" {
-    void custom_funct(KdCoord* coordinates, sint numPoints, sint numQuerys, KdCoord* query, KdCoord* results, sint numResults, sint* rootIdx);
+    void createTree_wrapper(KdCoord* coordinates, sint numPoints, sint* rootIdx);
 }
 
 /*
  * A custom function which acts as the main function 
  * This is the function that is called by fortran
  * calling parameters:
- * coordinates: Array containing the grig points
- * numPoints: Total number pf points in the grid
+ * coordinates: Array containing the grid points
+ * numPoints: Total number of points in the grid
  * rootIdx: Variable that will hold the index of the root of the kdTree
 */
-void custom_funct( KdCoord* coordinates, sint numPoints, sint numQuerys, KdCoord* query, KdCoord* results, sint numResults, sint* rootIdx)
+void createTree_wrapper( KdCoord* coordinates, sint numPoints, sint* rootIdx)
 {
 	sint numDimensions = 3;
+	
 	sint numThreads = 512;
 	sint numBlocks = 16;
 	
@@ -352,7 +353,7 @@ void custom_funct( KdCoord* coordinates, sint numPoints, sint numQuerys, KdCoord
 	
 	cout << endl;
 
-	cout<<"KD TREE MADE and stored on GPU"<<endl;
+	cout<<"KD-TREE made and stored on GPU"<<endl;
 
 
 	// rootIdx stores the index of the root node on the kdnodes array
@@ -372,9 +373,17 @@ extern "C" {
  * A custom function which acts as the main function 
  * This is the function that is called by fortran
  * calling parameters:
- *
- * 
- * 
+ * coordinates: Array containing the grid points
+ * numPoints: Total number of points in the grid
+ * numDimensions: Number of dimensions in the KDTree (3 as we have x,y,z directions)
+ * numQuerys: Total number of query points
+ * query: rray containing the query points
+ * results: array containing the nearest neighbours
+ * numResults: Number of nearest neighbours required per query point
+ * rootIdx: Variable that will hold the index of the root of the kdTree
+ * mltip: Multiplier to deal with program considering two points same
+ * gindices: array storing global indices (Used during interpolation)
+ * dists: array storing distances for NN from query points
 */
 void search_funct( KdCoord* coordinates, sint numPoints, sint numDimensions, sint numQuerys, KdCoord* query, KdCoord* results, sint numResults, sint rootIdx, 
 	float mltip, sint* gindices, double* dists, double* u, double* v, double* uinter, double* vinter)
@@ -383,7 +392,7 @@ void search_funct( KdCoord* coordinates, sint numPoints, sint numDimensions, sin
 	TIMER_DECLARATION();
 
 	TIMER_START();
-	// SEARCH FOR Nearest Neighbour
+	// SEARCH FOR Nearest Neighbours
 	double* interpRefs[4];
 	Gpu::searchKdTree(coordinates, numPoints, rootIdx, query, numResults, numDimensions, results, numQuerys, interpRefs, mltip);
 
