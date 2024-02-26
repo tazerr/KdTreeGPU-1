@@ -94,24 +94,6 @@ REAL(c_double), ALLOCATABLE :: u(:,:,:,:), v(:,:,:,:), uinter(:,:,:,:), vinter(:
 REAL, ALLOCATABLE :: error_u(:,:,:,:), error_v(:,:,:,:)
 
 
-!!**********************************TARRY*****************************************
-!tx=3
-!ty=3
-!tz=3
-!
-!ALLOCATE(tarry(tx,ty,tz))
-!
-!call temp_funct(tarry, tx, ty,tz)
-!
-!do k=1,tz
-!    do j=1,ty
-!        do i=1,tx
-!        write(*,*) "tarry(", i, j, k, ") =", tarry(i,j,k)
-!        end do
-!    end do
-!end do 
-!
-!pause
     !**********************************Background block*****************************************
 
 
@@ -161,19 +143,7 @@ DO nbl = 1,nblocks
     END DO
 END DO
 
-! Print the values for verification
-  	!do nbl = 1, nblocks
-    !	write(*,*) "Block:", nbl
-    !	do k = 1, NK(nbl)
-    !	  do j = 1, NJ(nbl)
-    !	    do i = 1, NI(nbl)
-    !	      write(*,*) "xgrid(", i, j, k, nbl, ") =", xgrid(i, j, k, nbl)
-    !	      write(*,*) "ygrid(", i, j, k, nbl, ") =", ygrid(i, j, k, nbl)
-    !	      write(*,*) "zgrid(", i, j, k, nbl, ") =", zgrid(i, j, k, nbl)
-    !	    end do
-    !	  end do
-    !	end do
-  	!end do
+
 !***************************************Second grid******************************************
 nblocksnew = 1
 
@@ -241,9 +211,7 @@ DO nbl = 1, nblocks
         DO j = 1, NJ(nbl)
             DO i = 1, NI(nbl)
             
-            ! Get the current index
-            !index = (nbl-1)*NI(nbl)*NJ(nbl)*NK(nbl)*numDimensions + (k-1)*NI(nbl)*NJ(nbl)*numDimensions + (j-1)*NI(nbl)*numDimensions +  (i-1)*numDimensions + 1
-
+            ! Calculate what the global index will be
             index = (nbl-1)*NI(nbl)*NJ(nbl)*NK(nbl)*numDimensions + &
                 (k-1)*NI(nbl)*NJ(nbl)*numDimensions + &
                 (j-1)*NI(nbl)*numDimensions + &
@@ -259,11 +227,6 @@ DO nbl = 1, nblocks
         END DO
     END DO
 END DO
-!***************************************call creation of KD tree******************************************
-
-!CALL custom_funct(coordinates, numPoints, numQuerys, query, results, numResults, rootIdx)
-!print*, numPoints
-!pause
 
 !***************************************Prepartion to call searching of KD tree******************************************
 
@@ -276,7 +239,7 @@ DO nbl = 1, nblocksnew
         DO j = 1, NJnew(nbl)
             DO i = 1, NInew(nbl)
             
-            ! Get the current index
+            ! Calculate what the global index will be
             index = (nbl-1)*NInew(nbl)*NJnew(nbl)*NKnew(nbl)*numDimensions + &
                 (k-1)*NInew(nbl)*NJnew(nbl)*numDimensions + &
                 (j-1)*NInew(nbl)*numDimensions + &
@@ -293,7 +256,7 @@ DO nbl = 1, nblocksnew
     END DO
 END DO
 
-!***************************************call searching of KD tree******************************************
+!***************************************call creating and searching of KD tree******************************************
 call cpu_time(time_s)
 print*, time_s
 
@@ -307,12 +270,11 @@ call cpu_time(time_esearch)
 print*, time_esearch
 print*, "TOTAL TIME TAKEN FOR SEARCH + GETTING RESULTS BACK: ", time_esearch-time_s
 
-!***************************************Print Result******************************************
+!***************************************Write out results******************************************
 open(1,file='grid.xyz',form='unformatted')
 	  
 write(1) nblocks
 write(1) ( NI(nbl),NJ(nbl), NK(nbl), nbl=1, nblocks) 
-! write(1) ( NI(nbl),NJ(nbl), nbl=1, nblocks) 
 
 DO nbl=1,nblocks
 
@@ -320,7 +282,6 @@ write(1) (((Xgrid(i,j,k,nbl), i=1,NI(nbl)),j=1,NJ(nbl)),k=1,NK(nbl))  &
 	        ,(((Ygrid(i,j,k,nbl), i=1,NI(nbl)),j=1,NJ(nbl)),k=1,NK(nbl))  &
 	        ,(((Zgrid(i,j,k,nbl), i=1,NI(nbl)),j=1,NJ(nbl)),k=1,NK(nbl))
 ENDDO!
-close(1)
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -328,15 +289,12 @@ open(1,file='grid2.xyz',form='unformatted')
 	  
 write(1) nblocksnew
 write(1) ( NInew(nbl),NJnew(nbl), NKnew(nbl), nbl=1, nblocks) 
-!write(1) ( NInew(nbl),NJnew(nbl), nbl=1, nblocksnew) 
-
 DO nbl=1,nblocksnew
 
 write(1) (((Xgridnew(i,j,k,nbl), i=1,NInew(nbl)),j=1,NJnew(nbl)),k=1,NKnew(nbl))  &
 	        ,(((Ygridnew(i,j,k,nbl), i=1,NInew(nbl)),j=1,NJnew(nbl)),k=1,NKnew(nbl))  &
 	        ,(((Zgridnew(i,j,k,nbl), i=1,NInew(nbl)),j=1,NJnew(nbl)),k=1,NKnew(nbl))
 ENDDO!
-close(1)
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -377,355 +335,7 @@ open (7, form = 'unformatted', file = 'flow_query.xyz')
 		END DO
 		close(7)
 
-
-
-!DO nbl = 1,nblocksnew
-!    DO k = 1,NKnew(nbl)
-!		DO j = 1,NJnew(nbl)
-!            DO i = 1,NInew(nbl)
-!            write(*,*) "uinter(",i,j,k,nbl,")=", uinter(i,j,k,nbl), vinter(i,j,k,nbl)
-!
-!            END DO
-!		END DO
-!    END DO
-!END DO
-
-
-
-!DO WHILE(i<=numQuerys*numResults)
-!WRITE(*,*), gindices(i)
-!i=i+1
-!END DO
-
-!write(*,*), "SEARCH FINISHED"
-
-!i=1
-!j=1
-!WRITE(*,*) "Closest points points found are as follows : "
-!DO WHILE (i<=size(results))
-!	WRITE(*, *) "X (", j, ") : ", results(i)
-!	WRITE(*, *) "Y (", j, ") : ", results(i+1)
-!	WRITE(*, *) "Z (", j, ") : ", results(i+2)
-!	j=j+1
-!	i=i+3
-!END DO
-
-!**************************************KD Tree Search******************************************
-
-!interptsx = 5
-!interptsy = 3
-!interplace = 2
-!
-!!ALLOCATE(query(numQuerys*numDimensions))
-!!ALLOCATE(gindices(numQuerys*numResults))
-!!ALLOCATE(dists(numQuerys*numResults))
-!
-!ALLOCATE (xstencil(interptsx,interptsy))
-!ALLOCATE (ystencil(interptsx,interptsy))
-!ALLOCATE (zstencil(interptsx,interptsy))
-!ALLOCATE (istencil(interptsx))
-!ALLOCATE (jstencil(interptsy))
-!
-!!$acc data copyin (Xgrid, Ygrid, Zgrid, Xgridnew, Ygridnew, Zgridnew)
-!!$acc data copyin (Igrid, Jgrid, Igridnew, Jgridnew)
-!!$acc data copyin (coordinates, results, query, gindices, dists)
-!!$acc data copyin (NI, NJ, NK, NKnew, NJnew, NInew)
-!!$acc data copyin (istencil, jstencil, xstencil, ystencil, zstencil)
-!
-!call cpu_time(time_sinter)
-!
-!	DO nbl = 1,nblocksnew
-!!$acc parallel loop collapse(3)!! private(istencil,jstencil,xstencil,ystencil,zstencil)
-!!@$acc data create(istencil, jstencil, xstencil, ystencil, zstencil)
-!    DO k = 1, NKnew(nbl)
-!    DO j = 1, NJnew(nbl)
-!    DO i = 1, NInew(nbl)
-!
-!        !query(1) = xgridnew(i,j,k,nbl)
-!		!query(2) = ygridnew(i,j,k,nbl)
-!		!query(3) = zgridnew(i,j,k,nbl)
-!
-!        !CALL search_funct(coordinates, numDimensions, numQuerys, query, results &
-!        !    , numResults, rootIdx, mltip, gindices, dists)
-!
-!        ! Get the current index
-!        index = (nbl-1)*NInew(nbl)*NJnew(nbl)*NKnew(nbl)+ &
-!            (k-1)*NInew(nbl)*NJnew(nbl)+ &
-!            (j-1)*NInew(nbl)+ &
-!            (i-1) + 1
-!            
-!        DO indexing = 1,numResults
-!			convertindex = gindices((index-1)*numResults+indexing)
-!			dw = (dists((index-1)*numResults+indexing))**0.5
-!			call get_loc_index(convertindex,loc_blk, loc_i, loc_j, loc_k)
-!            DO indx = 1,interptsx
-!				istencil(indx) = Igrid(loc_i + indx - interplace, loc_j, loc_k,loc_blk)
-!				DO indy = 1,interptsy
-!					xstencil(indx,indy) = Xgrid(loc_i + indx - interplace, loc_j+ indy - interplace, loc_k,loc_blk)
-!					ystencil(indx,indy) = Ygrid(loc_i + indx - interplace, loc_j+ indy - interplace, loc_k,loc_blk)
-!					zstencil(indx,indy) = Zgrid(loc_i + indx - interplace, loc_j+ indy - interplace, loc_k,loc_blk)
-!					jstencil(indy) = Jgrid(loc_i, loc_j + indy - interplace, loc_k,loc_blk)
-!				END DO
-!			END DO
-!            iinter = Igrid(loc_i, loc_j, loc_k,loc_blk)
-!			jinter = Jgrid(loc_i, loc_j, loc_k,loc_blk)
-! !           print*, zstencil
-!			call Coord_Interpolation(interptsx,interptsy,xstencil,ystencil,zstencil,istencil,jstencil &
-!                ,query((index-1)*numDimensions+1),query((index-1)*numDimensions+2),query((index-1)*numDimensions+3),iinter,jinter)
-!			Igridnew(i,j,k,nbl) = iinter
-!			Jgridnew(i,j,k,nbl) = jinter
-!        
-!!			print*, istencil
-!!			print*, jstencil
-!!			print*, iinter, jinter
-!!            pause
-!			
-!        END DO
-!    END DO
-!	END DO
-!	END DO
-!	END DO
-!
-!!$acc end data
-!!$acc end data
-!!$acc end data
-!!$acc end data
-!!$acc end data
-!
-!call cpu_time(time_einter)
-!
-!print*, time_einter-time_sinter
-
-!DO i=1, numQuerys*numResults
-!    CALL get_loc_index(gindices(i), loc_blk, loc_i, loc_j, loc_k)
-!    write(*,*) "xgrid(", i, ",", dists(i), ") =", xgrid(loc_i, loc_j, loc_k, loc_blk)
-!    write(*,*) "ygrid(", i, ",", dists(i), ") =", ygrid(loc_i, loc_j, loc_k, loc_blk) 
-!    write(*,*) "zgrid(", i, ",", dists(i), ") =", zgrid(loc_i, loc_j, loc_k, loc_blk)
-!END DO
-
-
-
 !*******************************************************END*****************************************
 END PROGRAM main
 
-!*************************************Local Index subroutine***************************************
-SUBROUTINE get_loc_index(global_index,blk,iloc,jloc,kloc)
-    !$acc routine seq
-    USE arrs
 
-    INTEGER :: global_index, blk, iloc, jloc, kloc
-    INTEGER :: rest_index
-    INTEGER :: sblk,eblk
-    sblk=0
-
-    DO nbl = 1,nblocks
-        !eblk=256*256*1
-        eblk=NI(nbl)*NJ(nbl)*NK(nbl)
-        IF ((global_index>sblk).and.(global_index<=eblk)) THEN 
-            blk = nbl
-            EXIT
-        END IF
-        sblk=eblk
-    END DO
-
-    rest_index = global_index - sblk
-    kloc = int(rest_index/(NJ(blk)*NI(blk)))
-    !kloc = int(rest_index/(256*256))
-    rest_index = rest_index - kloc*NI(nbl)*NJ(nbl)
-    !rest_index = rest_index - kloc*256*256
-    !jloc = int(rest_index/(256))
-    jloc = int(rest_index/(NI(nbl)))
-    rest_index = rest_index - jloc*NI(blk)
-    !rest_index = rest_index - jloc*256
-    iloc = int(rest_index)
-    
-    iloc = iloc+1
-    jloc = jloc+1
-    kloc = kloc+1
-        
-END 
-
-!*************************************I-J prediction Subroutine********************************************
-SUBROUTINE Coord_Interpolation(nxint, nyint, xgint, ygint, zgint, igint, jgint, xpin, ypin, zpin, ipred, jpred)
-
-!$acc routine seq
-USE iso_c_binding
-implicit none
-
-integer nxint, nyint, n, iter_int
-real,dimension (nxint, nyint) :: xgint, ygint, zgint
-real,dimension (nxint) :: igint
-real,dimension (nyint) :: jgint
-real, allocatable :: iweight(:), jweight(:)
-integer lint, mint, llint, mmint
-real ipred, jpred, itemp, jtemp
-real(c_float) xpin, ypin, zpin
-real xhat, yhat,zhat, xihat, yihat, xjhat, yjhat, zihat, zjhat
-real jac_int(3,2), hat_coord(3), intA(2,2) , RHS_int(2)
-real detA, invA(2,2), mind, consa, consb
-real, allocatable :: intweights(:,:), diffweightsi(:,:),diffweightsj(:,:),weighti(:) &
-    , weightj(:), weightdiffi(:), weightdiffj(:)
-
-mind = 0.00000001d0
-
-!allocate (xgint(nxint,nyint))
-!allocate (ygint(nxint,nyint))
-!allocate (zgint(nxint,nyint))
-!allocate (igint(nxint))
-!allocate (jgint(nyint))
-
-allocate (iweight(nxint))
-allocate (jweight(nyint))
-allocate (intweights(nxint,nyint))
-allocate (weightdiffi(nxint))
-allocate (weightdiffj(nyint))
-allocate (diffweightsi(nxint,nyint))
-allocate (diffweightsj(nxint,nyint))
-
-!***********************************Interpolation coefficients**************************
-
-!print*, ygint
-
-
-itemp = ipred + 1.d0
-jtemp = jpred + 1.d0 
-iter_int=0
-!print*, ipred, jpred
-Do while ((abs(ipred-itemp).gt.mind).or.(abs(jpred-jtemp).gt.mind))
- iter_int= iter_int+1
-! print*,iter_int
-itemp = ipred
-jtemp = jpred	
-
-Do lint = 1,nxint
-  iweight(lint) = 1.0D+00
-    do mint = 1, nxint
-      if ( mint /= lint ) then
-        iweight(lint) = iweight(lint) * (itemp-igint(mint)) / ( igint(lint) - igint(mint) )
-      end if
-    end do
-Enddo
-
-Do lint = 1,nyint
-  jweight(lint) = 1.0D+00
-    do mint = 1, nyint
-      if ( mint /= lint ) then
-        jweight(lint) = jweight(lint) * (jtemp-jgint(mint)) / ( jgint(lint) - jgint(mint) )
-      end if
-    end do
-Enddo	
-
-xhat = 0.d0
-yhat = 0.d0
-zhat = 0.d0
-Do lint = 1,nxint
-	Do mint = 1,nyint
-		xhat = xhat + xgint(lint,mint) * iweight(lint) * jweight(mint)
-		yhat = yhat + ygint(lint,mint) * iweight(lint) * jweight(mint)
-		zhat = zhat + zgint(lint,mint) * iweight(lint) * jweight(mint)
-	enddo
-Enddo
-
-!print*, xhat, yhat, zhat
-
-Do lint = 1,nxint
-  weightdiffi(lint) = 0.d0
-    do mint = 1, nxint
-      if ( mint /= lint ) then
-		consa = 1.d0
-		do n = 1,nxint
-			if(n/=lint) then
-				consa = consa/( igint(lint) - igint(n) )
-			endif
-		enddo
-		consb = 1.d0
-		do n = 1,nxint
-			if((n/=lint).and.(n/=mint)) then
-				consb = consb * (itemp-igint(n))
-			endif
-		enddo
- !       weightdiffi(lint) = weightdiffi(lint) + iweight(lint)/(itemp-igrid(mint))
-		weightdiffi(lint) = weightdiffi(lint) + consb*consa
-      end if
-    end do
-Enddo
-
-Do lint = 1,nyint
-  weightdiffj(lint) = 0.d0
-    do mint = 1, nyint
-      if ( mint /= lint ) then
-		consa = 1.d0
-		do n = 1,nyint
-			if(n/=lint) then
-				consa = consa/( jgint(lint) - jgint(n) )
-			endif
-		enddo
-		consb = 1.d0
-		do n = 1,nyint
-			if((n/=lint).and.(n/=mint)) then
-				consb = consb * (jtemp-jgint(n))
-			endif
-		enddo
- !       weightdiffi(lint) = weightdiffi(lint) + iweight(lint)/(itemp-igrid(mint))
-		weightdiffj(lint) = weightdiffj(lint) + consb*consa
-      end if
-    end do
-Enddo
-
-!print*, iweight
-!print*, sum(iweight)
-
-Do lint = 1,nxint
-	Do mint = 1,nyint
-		diffweightsi(lint,mint) = weightdiffi(lint) * jweight(mint)
-		diffweightsj(lint,mint) = iweight(lint) * weightdiffj(mint)
-	enddo
-Enddo
-
-xihat = 0.d0
-yihat = 0.d0
-Do lint = 1,nxint
-	Do mint = 1,nyint
-		xihat = xihat + diffweightsi(lint,mint) * xgint(lint,mint)
-		yihat = yihat + diffweightsi(lint,mint) * ygint(lint,mint)
-		xjhat = xjhat + diffweightsj(lint,mint) * xgint(lint,mint)
-		yjhat = yjhat + diffweightsj(lint,mint) * ygint(lint,mint)
-		zihat = zihat + diffweightsi(lint,mint) * zgint(lint,mint)
-		zjhat = zjhat + diffweightsj(lint,mint) * zgint(lint,mint)
-	enddo
-Enddo
-
-!print*, xihat, yihat, zihat
-!print*, xjhat, yjhat, zjhat
-
-
-jac_int(1,1) = xihat
-jac_int(1,2) = xjhat
-jac_int(2,1) = yihat
-jac_int(2,2) = yjhat
-jac_int(3,1) = zihat
-jac_int(3,2) = zjhat
-
-hat_coord(1) = xhat-xpin
-hat_coord(2) = yhat-ypin
-hat_coord(3) = zhat-zpin
-
-intA = matmul(transpose(jac_int),jac_int)
-RHS_int = matmul(transpose(jac_int),hat_coord)
-
-detA = intA(2,2) *intA(1,1) - intA(1,2)*intA(2,1)
-
-invA(1,1) = intA(2,2)/detA
-invA(1,2) = -1.d0 * intA(2,1)/detA
-invA(2,1) = -1.d0 * intA(1,2)/detA
-invA(2,2) = intA(1,1)/detA
-
-ipred = itemp - (invA(1,1)*RHS_int(1) + invA(1,2)*RHS_int(2))
-jpred = jtemp - (invA(2,1)*RHS_int(1) + invA(2,2)*RHS_int(2))
-
-!print*, ipred
-!print*, jpred
-
-Enddo
-
-END SUBROUTINE
