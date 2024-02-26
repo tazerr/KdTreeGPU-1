@@ -1383,7 +1383,7 @@ __global__ void cuIterSearchKdTree(KdNode *root, KdNode kdNodes[], const KdCoord
 
 		//printf("%d\n", tid);
 
-		printf("Query Point %d :: %f %f %f, SOL: %d\n", tid, qu[0], qu[1], qu[2], sizeOfList);
+		//printf("Query Point %d :: %f %f %f, SOL: %d\n", tid, qu[0], qu[1], qu[2], sizeOfList);
 
 		int numIter=0;
 		
@@ -1454,7 +1454,7 @@ __global__ void cuIterSearchKdTree(KdNode *root, KdNode kdNodes[], const KdCoord
 		}
 		
 		//printResult<<<1,1>>>(pq, numResults, coords, dim, mltip);
-		printf("tid: %d :::: Iter:%d :::: BatchSize %d\n\n",tid, numIter, *batchSize);
+	//	printf("tid: %d :::: Iter:%d :::: BatchSize %d\n\n",tid, numIter, *batchSize);
 		// printResult<<<1,1>>>(pq, numResults, coords, dim, mltip);
 
 
@@ -1462,83 +1462,82 @@ __global__ void cuIterSearchKdTree(KdNode *root, KdNode kdNodes[], const KdCoord
 
 }
 
-
-
-void Gpu::getSearchResultsGPU(pair_coord_dist** pqRefs, pair_coord_dist* pq, KdCoord* coordinates, const sint numResults,
-	const sint dim, KdCoord* results, sint numQuerys, float mltip, sint* gindices, double* dists) {
+__global__ void cuCalculateGrid(KdCoord* coordinates, sint numPoints, sint numDimensions, float mltip, double* u, double* v) {
 	
-	setDevice();
+	int index = blockIdx.x * blockDim.x + threadIdx.x;
+  	int stride = blockDim.x * gridDim.x;
 
-	cudaEvent_t start, stop;
-	cudaEventCreate(&start);
-	cudaEventCreate(&stop);
-	cudaEventRecord(start);
-	checkCudaErrors(cudaMemcpy(pq, pqRefs[0], sizeof(pair_coord_dist)*numResults*numQuerys, cudaMemcpyDeviceToHost));
-	cudaEventRecord(stop);
-	cudaEventSynchronize(stop);
-
-	float cudaMemcpySeconds = 0;
-	cudaEventElapsedTime(&cudaMemcpySeconds, start, stop);
-	cudaMemcpySeconds = cudaMemcpySeconds/1000;
-	printf("cudaMemcpy (Gpu::getSearchResultsGPU) execution time: %f s\n", cudaMemcpySeconds);
-
-
-	for(sint ind=0; ind<numResults*numQuerys; ind++) {
-		
-		for (sint i = 0; i < dim; i++) {
-			results[(ind*dim)+i] = coordinates[((pq[ind].tpl)*dim)+i]/mltip;
-		}
-
-		gindices[ind] = pq[ind].tpl;
-		dists[ind] = pow(pq[ind].dist,0.5);
-
-		// printf("gindi: %d dists: %f\n", gindices[ind], pq[ind].dist);
+	for(int i=index; i<numPoints; i+=stride) {
+		u[i] = pow(coordinates[i*numDimensions]/mltip,2)+pow(coordinates[i*numDimensions+1]/mltip,2);//+pow(coordinates[i*numDimensions+2]/mltip,2);
+		v[i] = sin(coordinates[i*numDimensions]/mltip)*cos(pow(coordinates[i*numDimensions+1]/mltip,2));//*sin(coordinates[i*numDimensions+2]/mltip);
 	}
 	
-	// double uinter[numQuerys], vinter[numQuerys];
-	// double totalwt;
+}
 
-	// for(sint n=0; n<numQuerys; n++) {
-	// 	uinter[n]=0;
-	// 	vinter[n]=0;
-	// 	totalwt=0;
+__global__ void cuInterpolation(KdCoord* coordinates, sint numPoints, sint numDimensions, sint numQuerys, KdCoord* query, sint numResults, float mltip, double* u, double* v, double* uinter, double* vinter, pair_coord_dist* results) {
 
-	// 	for(sint i=0; i<numResults; i++) {
-	// 		totalwt = (1.0/(dists[n*numQuerys+i])^2)+ totalwt;
-	// 		uinter[n] = uinter[n] + u[gindices[n*numQuerys+i]/dists[n*numQuerys+i]^2];
-	// 		vinter[n] = vinter[n] + v[gindices[n*numQuerys+i]/dists[n*numQuerys+i]^2];
+	int index = blockIdx.x * blockDim.x + threadIdx.x;
+  	int stride = blockDim.x * gridDim.x;
 
-	// 	}
+	for(sint n=index; n<numQuerys; n+=stride) {
+		uinter[n]=0;
+		vinter[n]=0;
+		double totalwt=0;
 
-	// 	uinter[n] = uinter[n]/totalwt;
-	// 	vinter[n] = vinter[n]/totalwt;
+		for(sint i=0; i<numResults; i++) {
+			// totalwt = 1/(pow(dists[n*numResults+i],2)) + totalwt;
+			
+			// uinter[n]=uinter[n]+u[(gindices[n*numResults+i])]/pow(dists[n*numResults+i],2);
+			// vinter[n]=vinter[n]+v[(gindices[n*numResults+i])]/pow(dists[n*numResults+i],2);
 
-	// }
+			totalwt = 1/(results[n*numResults+i].dist) + totalwt;
+			
+			uinter[n]=uinter[n]+u[(results[n*numResults+i].tpl)]/results[n*numResults+i].dist;
+			vinter[n]=vinter[n]+v[(results[n*numResults+i].tpl)]/results[n*numResults+i].dist;
 
-	// double uerror[numQuerys], verror[numQuerys];
+		}
 
-	// for(sint n=0; n<numQuerys; n++) {
-	// 	uerror[n] = abs(uinter[n] - ( pow(query[n],2)+pow(query[n+1],2)+pow(query[n+2],2)));
-	// 	verror[n] = abs(vinter[n] - (sin(query[n])*cos(pow(query[n+1],2))*sin(query[n+2])));
-	// }
-
-	//print out max-min values of error of both u and v
-	
-	
-	/*
-	sint interptsx=5, interptsy=3, interplace=2;
-
-	double* xstencil, ystencil, zstencil, istencil, jstencil;
-	checkCudaErrors(cudaMalloc((void**) &xstencil, sizeof(double)*interptsx*interptsy));
-	checkCudaErrors(cudaMalloc((void**) &ystencil, sizeof(double)*interptsx*interptsy));
-	checkCudaErrors(cudaMalloc((void**) &zstencil, sizeof(double)*interptsx*interptsy));
-	checkCudaErrors(cudaMalloc((void**) &istencil, sizeof(double)*interptsx));
-	checkCudaErrors(cudaMalloc((void**) &jstencil, sizeof(double)*interptsy));
-	*/
+		uinter[n] = uinter[n]/totalwt;
+		vinter[n] = vinter[n]/totalwt;
+	}
 }
 
 
-void Gpu::searchKdTreeGPU(refIdx_t root, const KdCoord* query, const sint numResults, const sint dim, pair_coord_dist**pqRefs, int q, float mltip) {
+
+
+// void Gpu::getSearchResultsGPU(pair_coord_dist** pqRefs, pair_coord_dist* pq, KdCoord* coordinates, const sint numResults,
+// 	const sint dim, KdCoord* results, sint numQuerys, float mltip, sint* gindices, double* dists) {
+	
+// 	setDevice();
+
+// 	cudaEvent_t start, stop;
+// 	cudaEventCreate(&start);
+// 	cudaEventCreate(&stop);
+// 	cudaEventRecord(start);
+// 	checkCudaErrors(cudaMemcpy(pq, pqRefs[0], sizeof(pair_coord_dist)*numResults*numQuerys, cudaMemcpyDeviceToHost));
+// 	cudaEventRecord(stop);
+// 	cudaEventSynchronize(stop);
+
+// 	float cudaMemcpySeconds = 0;
+// 	cudaEventElapsedTime(&cudaMemcpySeconds, start, stop);
+// 	cudaMemcpySeconds = cudaMemcpySeconds/1000;
+// 	printf("cudaMemcpy (Gpu::getSearchResultsGPU) execution time: %f s\n", cudaMemcpySeconds);
+
+
+// 	for(sint ind=0; ind<numResults*numQuerys; ind++) {
+		
+// 		for (sint i = 0; i < dim; i++) {
+// 			results[(ind*dim)+i] = coordinates[((pq[ind].tpl)*dim)+i]/mltip;
+// 		}
+
+// 		gindices[ind] = pq[ind].tpl;
+// 		dists[ind] = pow(pq[ind].dist,0.5);
+
+// 	}
+// }
+
+
+void Gpu::searchKdTreeGPU(refIdx_t root, const sint numPoints, const KdCoord* query, const sint numResults, const sint numDimensions, double** interpRefs, sint numQuerys, float mltip) {
 	setDevice();
 
 	//Declare variables pointers for device
@@ -1548,56 +1547,44 @@ void Gpu::searchKdTreeGPU(refIdx_t root, const KdCoord* query, const sint numRes
 	pair_coord_dist* d_pq;
 	sint counter = 0;
 	sint* d_numQuerys, *d_batchSize;
-	pair_coord_dist** d_pqRefs;
 	litem* glist;
 
 	//Allocate memory and copy the values to the pointers
 	checkCudaErrors(cudaMalloc((void **) &d_mltip, sizeof(float))); 
 	checkCudaErrors(cudaMemcpy(d_mltip, &mltip, sizeof(float), cudaMemcpyHostToDevice));
 
-	//checkCudaErrors(cudaMalloc((void ***) &d_pqRefs, sizeof(pair_coord_dist*)*q)); 
-	checkCudaErrors(cudaMalloc((void **) &d_pq, sizeof(pair_coord_dist)*q*numResults));
+	checkCudaErrors(cudaMalloc((void **) &d_pq, sizeof(pair_coord_dist)*numQuerys*numResults));
 
 	checkCudaErrors(cudaMalloc((void **) &d_numQuerys, sizeof(sint))); 
-	checkCudaErrors(cudaMemcpy(d_numQuerys, &q, sizeof(sint), cudaMemcpyHostToDevice));
+	checkCudaErrors(cudaMemcpy(d_numQuerys, &numQuerys, sizeof(sint), cudaMemcpyHostToDevice));
 
-	checkCudaErrors(cudaMalloc((void **) &d_query, sizeof(KdCoord)*dim*q)); 
-	//checkCudaErrors(cudaMemcpy(d_query, query, sizeof(KdCoord)*dim, cudaMemcpyHostToDevice));
-	checkCudaErrors(cudaMemcpy(d_query, query, sizeof(KdCoord)*dim*q, cudaMemcpyHostToDevice));
+	checkCudaErrors(cudaMalloc((void **) &d_query, sizeof(KdCoord)*numDimensions*numQuerys)); 
+	checkCudaErrors(cudaMemcpy(d_query, query, sizeof(KdCoord)*numDimensions*numQuerys, cudaMemcpyHostToDevice));
 	
 	checkCudaErrors(cudaMalloc((void **) &d_numResults, sizeof(sint))); 
 	checkCudaErrors(cudaMemcpy(d_numResults, &numResults, sizeof(sint), cudaMemcpyHostToDevice));
 	
 	checkCudaErrors(cudaMalloc((void **) &d_dim, sizeof(sint))); 
-	checkCudaErrors(cudaMemcpy(d_dim, &dim, sizeof(sint), cudaMemcpyHostToDevice));
-	
-	//checkCudaErrors(cudaMalloc((void **) &d_pq, sizeof(pair_coord_dist)*numResults));
+	checkCudaErrors(cudaMemcpy(d_dim, &numDimensions, sizeof(sint), cudaMemcpyHostToDevice));
 	
 	checkCudaErrors(cudaMalloc((void **) &d_counter, sizeof(sint)));
 	checkCudaErrors(cudaMemcpy(d_counter, &counter, sizeof(sint), cudaMemcpyHostToDevice));
 	
-	//cusearchKdTreeGPU<<< 1, 1>>>(d_kdNodes+root, d_kdNodes, d_coord, &d_query[0], d_numResults, d_dim, 0, d_pq, d_counter, d_mltip);
-	//pqRefs[q] = d_pq;
-	//syncGPU();
-
 	// printf("SIZE: %ld bytes", 33000*q*sizeof(litem));
-	sint batchSize=10;
-	sint sizeOfList=1700000;
+	sint batchSize=1000;
+	sint sizeOfList=170000;
 	checkCudaErrors(cudaMalloc((void **) &glist, sizeOfList*batchSize*sizeof(litem)));
 	checkCudaErrors(cudaDeviceSynchronize());
 	// printf("MEMORY ALLOCATED\n");
-
 
 	cudaEvent_t start, stop;
 	cudaEventCreate(&start);
 	cudaEventCreate(&stop);
 
 	cudaEventRecord(start);
-
-	
-	sint totalBatches = int(q/batchSize);
+	sint totalBatches = int(numQuerys/batchSize);
 	printf("Total Batches: %d\n\n", totalBatches);
-	sint remainingPoints = q%batchSize;
+	sint remainingPoints = numQuerys%batchSize;
 	printf("Total remainingPoints: %d\n\n", remainingPoints);
 
 	checkCudaErrors(cudaMalloc((void **) &d_batchSize, sizeof(sint))); 
@@ -1643,9 +1630,24 @@ void Gpu::searchKdTreeGPU(refIdx_t root, const KdCoord* query, const sint numRes
 	cudaEventDestroy(start);
 	cudaEventDestroy(stop);
 	//checkCudaErrors(cudaDeviceSynchronize());
-	pqRefs[0] = d_pq;
 
-	printResultwhole<<<1,1>>>(d_pq, d_numQuerys, d_numResults, d_coord, d_dim, d_mltip, d_query);
+	double* d_u, *d_v, *d_uinter, *d_vinter;
+
+	checkCudaErrors(cudaMalloc((void **) &d_u, sizeof(double)*numPoints)); 
+	checkCudaErrors(cudaMalloc((void **) &d_v, sizeof(double)*numPoints)); 
+
+	checkCudaErrors(cudaMalloc((void **) &d_uinter, sizeof(double)*numQuerys)); 
+	checkCudaErrors(cudaMalloc((void **) &d_vinter, sizeof(double)*numQuerys)); 
+
+	cuCalculateGrid<<<numBlocks, numThreads>>>(d_coord, numPoints, numDimensions, mltip, d_u, d_v);
+
+	cuInterpolation<<<numBlocks, numThreads>>>(d_coord, numPoints, numDimensions, numQuerys, d_query, numResults, mltip, d_u, d_v, d_uinter, d_vinter, d_pq);
+
+	interpRefs[0]=d_u;
+	interpRefs[1]=d_v;
+	interpRefs[2]=d_uinter;
+	interpRefs[3]=d_vinter;
+//	printResultwhole<<<1,1>>>(d_pq, d_numQuerys, d_numResults, d_coord, d_dim, d_mltip, d_query);
 
 	//checkCudaErrors(cudaMemcpy(pqRefs, d_pqRefs, sizeof(pair_coord_dist*)*q, cudaMemcpyDeviceToHost));
 
@@ -1653,23 +1655,38 @@ void Gpu::searchKdTreeGPU(refIdx_t root, const KdCoord* query, const sint numRes
 }
 
 
-void Gpu::searchKdTree(KdCoord* coordinates, refIdx_t root, const KdCoord* query, const sint numResults, 
-	const sint dim, KdCoord* results, sint numQuerys, pair_coord_dist** pqRefs, float mltip) {
+void Gpu::searchKdTree(KdCoord* coordinates, const sint numPoints, refIdx_t root, const KdCoord* query, const sint numResults, 
+	const sint dim, KdCoord* results, sint numQuerys, double** interpRefs, float mltip) {
 
-	gpus[0]->searchKdTreeGPU(root, query, numResults, dim, pqRefs, numQuerys, mltip);		
-//#pragma acc parallel loop	
-//	for(int q=0; q<numQuerys; q++) {
-//		gpus[0]->searchKdTreeGPU(root, &query[q*dim], numResults, dim, pqRefs, q, mltip);
-//	};
+	gpus[0]->searchKdTreeGPU(root, numPoints, query, numResults, dim, interpRefs, numQuerys, mltip);		
+
 }
 
-void Gpu::getSearchResults(pair_coord_dist** pqRefs, KdCoord* coordinates, const sint numResults,
-	const sint dim, KdCoord* results, sint numQuerys, float mltip, sint* gindices, double* dists) {
+// void Gpu::getSearchResults(double** interpRefs, KdCoord* coordinates, const sint numResults,
+// 	const sint dim, KdCoord* results, sint numQuerys, float mltip, sint* gindices, double* dists) {
 
-		pair_coord_dist pq[numResults*numQuerys];
-		gpus[0]->getSearchResultsGPU(pqRefs, pq, coordinates, numResults, dim, results, numQuerys, mltip, gindices, dists);
+// 	pair_coord_dist pq[numResults*numQuerys];
+// 	gpus[0]->getSearchResultsGPU(interpRefs, pq, coordinates, numResults, dim, results, numQuerys, mltip, gindices, dists);
 
-	}
+// }
+
+void Gpu::getInterpResults(double** interpRefs, sint numPoints, sint numQuerys, double* u, double* v, double* uinter, double* vinter) {
+
+	gpus[0]->getInterpResultsGPU(interpRefs, numPoints, numQuerys, u, v, uinter, vinter);
+
+}
+
+void Gpu::getInterpResultsGPU(double** interpRefs, sint numPoints, sint numQuerys, double* u, double* v, double* uinter, double* vinter){
+
+	checkCudaErrors(cudaMemcpy(u, interpRefs[0], sizeof(double)*numPoints, cudaMemcpyDeviceToHost));
+	checkCudaErrors(cudaMemcpy(v, interpRefs[1], sizeof(double)*numPoints, cudaMemcpyDeviceToHost));
+	checkCudaErrors(cudaMemcpy(uinter, interpRefs[2], sizeof(double)*numQuerys, cudaMemcpyDeviceToHost));
+	checkCudaErrors(cudaMemcpy(vinter, interpRefs[3], sizeof(double)*numQuerys, cudaMemcpyDeviceToHost));
+	
+ }
+
+
+
 
 void Gpu::interpolation(KdCoord* coordinates, sint numPoints, sint numDimensions, sint numQuerys, KdCoord* query, sint numResults, sint* gindices, double* dists, float mltip, double* u, double* v, double* uinter, double* vinter) {
 
@@ -1677,53 +1694,45 @@ void Gpu::interpolation(KdCoord* coordinates, sint numPoints, sint numDimensions
 	// double u[numPoints];
 	// double v[numPoints];
 
-	// double u[numQuerys*numResults];
-	// double v[numQuerys*numResults];
-
-	// for(sint n=0; n<numQuerys; n++) {
-	// 	for(sint i=0; i<numResults; i++) {
-	// 		u[n*numResults+i] = pow(coordinates[gindices[n*numResults+i]*numDimensions]/mltip,2)+pow(coordinates[gindices[n*numResults+i]*numDimensions+1]/mltip,2)+pow(coordinates[gindices[n*numResults+i]*numDimensions+2]/mltip,2);
-	// 		v[n*numResults+i] = sin(coordinates[gindices[n*numResults+i]*numDimensions]/mltip)*cos(pow(coordinates[gindices[n*numResults+i]*numDimensions+1]/mltip,2))*sin(coordinates[gindices[n*numResults+i]*numDimensions+2]/mltip);
-	// 	}
+	// for(int i=0; i<numPoints; i++) {
+	// 	u[i] = pow(coordinates[i*numDimensions]/mltip,2)+pow(coordinates[i*numDimensions+1]/mltip,2);//+pow(coordinates[i*numDimensions+2]/mltip,2);
+	// 	v[i] = sin(coordinates[i*numDimensions]/mltip)*cos(pow(coordinates[i*numDimensions+1]/mltip,2));//*sin(coordinates[i*numDimensions+2]/mltip);
+	// 	// printf("u: %lf, v: %fl\n", u[i], v[i]);
 	// }
 
-	for(int i=0; i<numPoints; i++) {
-		u[i] = pow(coordinates[i*numDimensions]/mltip,2)+pow(coordinates[i*numDimensions+1]/mltip,2);//+pow(coordinates[i*numDimensions+2]/mltip,2);
-		v[i] = sin(coordinates[i*numDimensions]/mltip)*cos(pow(coordinates[i*numDimensions+1]/mltip,2));//*sin(coordinates[i*numDimensions+2]/mltip);
-		// printf("u: %lf, v: %fl\n", u[i], v[i]);
-	}
+	// // double uinter[numQuerys], vinter[numQuerys];
+	// double totalwt;
 
-	// double uinter[numQuerys], vinter[numQuerys];
-	double totalwt;
+	// for(sint n=0; n<numQuerys; n++) {
+	// 	uinter[n]=0;
+	// 	vinter[n]=0;
+	// 	totalwt=0;
 
-	for(sint n=0; n<numQuerys; n++) {
-		uinter[n]=0;
-		vinter[n]=0;
-		totalwt=0;
+	// //	printf("\n");
 
-		printf("\n");
+	// //	printf("Query: %f  %f %f \n", query[n*numDimensions],query[n*numDimensions+1], query[n*numDimensions+2]);
 
-		printf("Query: %f  %f %f \n", query[n*numDimensions],query[n*numDimensions+1], query[n*numDimensions+2]);
-
-		for(sint i=0; i<numResults; i++) {
-			totalwt = 1/(pow(dists[n*numResults+i],2)) + totalwt;
+	// 	for(sint i=0; i<numResults; i++) {
+	// 		totalwt = 1/(pow(dists[n*numResults+i],2)) + totalwt;
 			
-			uinter[n]=uinter[n]+u[(gindices[n*numResults+i])]/pow(dists[n*numResults+i],2);
-			vinter[n]=vinter[n]+v[(gindices[n*numResults+i])]/pow(dists[n*numResults+i],2);
+	// 		uinter[n]=uinter[n]+u[(gindices[n*numResults+i])]/pow(dists[n*numResults+i],2);
+	// 		vinter[n]=vinter[n]+v[(gindices[n*numResults+i])]/pow(dists[n*numResults+i],2);
 
-			// uinter[n]=uinter[n]+u[n*numResults+i]/pow(dists[n*numResults+i],2);
-			// vinter[n]=vinter[n]+v[n*numResults+i]/pow(dists[n*numResults+i],2);
+	// 		// uinter[n]=uinter[n]+u[n*numResults+i]/pow(dists[n*numResults+i],2);
+	// 		// vinter[n]=vinter[n]+v[n*numResults+i]/pow(dists[n*numResults+i],2);
 
-			printf("NearestNeigbour(%d) with gInd %d: x:%f y:%f z:%f, u:%lf, v:%lf \n", i, gindices[n*numResults+i], coordinates[gindices[n*numResults+i]*numDimensions]/mltip, coordinates[gindices[n*numResults+i]*numDimensions+1]/mltip, coordinates[gindices[n*numResults+i]*numDimensions+2]/mltip, u[n*numResults+i], v[n*numResults+i]);
+	// //		printf("NearestNeigbour(%d) with gInd %d: x:%f y:%f z:%f, u:%lf, v:%lf \n", i, gindices[n*numResults+i], coordinates[gindices[n*numResults+i]*numDimensions]/mltip, coordinates[gindices[n*numResults+i]*numDimensions+1]/mltip, coordinates[gindices[n*numResults+i]*numDimensions+2]/mltip, u[n*numResults+i], v[n*numResults+i]);
 
-		}
+	// 	}
 
-		uinter[n] = uinter[n]/totalwt;
-		vinter[n] = vinter[n]/totalwt;
+	// 	uinter[n] = uinter[n]/totalwt;
+	// 	vinter[n] = vinter[n]/totalwt;
 
-		printf("totalwt: %lf, uinter: %lf, vinter: %lf\n", totalwt, uinter[n], vinter[n]);
+	// //	printf("totalwt: %lf, uinter: %lf, vinter: %lf\n", totalwt, uinter[n], vinter[n]);
 
-	}
+	// }
+
+	gpus[0]->interpolationGPU(coordinates, numPoints, numDimensions, numQuerys, query, numResults, mltip, u, v, uinter, vinter);
 
 	float uerror[numQuerys], verror[numQuerys];
 
@@ -1749,4 +1758,21 @@ void Gpu::interpolation(KdCoord* coordinates, sint numPoints, sint numDimensions
 	}
 
 	printf("maxu: %lf, maxv: %lf, minu: %lf, minv: %lf", maxu, maxv, minu, minv);
+}
+
+void Gpu::interpolationGPU(KdCoord* coordinates, sint numPoints, sint numDimensions, sint numQuerys, KdCoord* query, sint numResults, float mltip, double* u, double* v, double* uinter, double* vinter){
+	// double* d_u, *d_v, *d_uinter, *d_vinter;
+
+	// checkCudaErrors(cudaMalloc((void **) &d_u, sizeof(double)*numPoints)); 
+	// checkCudaErrors(cudaMalloc((void **) &d_v, sizeof(double)*numPoints)); 
+
+	// checkCudaErrors(cudaMalloc((void **) &d_uinter, sizeof(double)*numQuerys)); 
+	// checkCudaErrors(cudaMalloc((void **) &d_vinter, sizeof(double)*numQuerys)); 
+
+	// cuCalculateGrid<<<numBlocks, numThreads>>>(d_coord, numPoints, numDimensions, mltip, d_u, d_v);
+
+	// cuInterpolation<<<numBlocks, numThreads>>>(d_coord, numPoints, numDimensions, numQuerys, d_query, numResults, mltip, d_u, d_v, d_uinter, d_vinter, results);
+
+
+
 }

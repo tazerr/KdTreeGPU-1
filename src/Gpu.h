@@ -86,11 +86,11 @@ public:
 	static refIdx_t buildKdTree(KdNode kdNodes[], const sint numTuples, const sint dim);
 	static sint     verifyKdTree(KdNode kdNodes[], const sint root, const sint dim, const sint numTuples);
 	static void     getKdTreeResults(KdNode kdNodes[], KdCoord coord[], const sint numTuples, const sint dim);
-	static void  	searchKdTree(KdCoord* coordinates, refIdx_t root, const KdCoord* query, const sint numResults, const sint dim, KdCoord* results, sint numQuerys, pair_coord_dist** pqRefs, float mltip);
-	static void  	getSearchResults(pair_coord_dist** pqRefs, KdCoord* coordinates, const sint numResults, const sint dim, 
+	static void  	searchKdTree(KdCoord* coordinates, const sint numPoints, refIdx_t root, const KdCoord* query, const sint numResults, const sint dim, KdCoord* results, sint numQuerys, double** interpRefs, float mltip);
+	static void  	getSearchResults(double** interpRefs, KdCoord* coordinates, const sint numResults, const sint dim, 
 					KdCoord* results, sint numQuerys, float mltip, sint* gindices, double* dists);
 	static void interpolation(KdCoord* coordinates, sint numPoints, sint numDimensions, sint numQuerys, KdCoord* query, sint numResults, sint* gindices, double* dists,float mltip, double* u, double* v, double* uinter, double* vinter);
-	
+	static void getInterpResults(double** interpRefs, sint numPoints, sint numQuerys, double* u, double* v, double* uinter, double* vinter);
 	static int      getNumThreads() {
 		if (numGPUs==2) {
 			if  (gpus[0] == NULL || gpus[1] == NULL) return 0;
@@ -314,11 +314,16 @@ private: // These are the methods specific verifyKdTree
 	int  verifyKdTreeGPU(const sint root, const sint pstart, const sint dim, const sint numTuples);
 
 private: //Methods specifc to searchKdtree
-	void searchKdTreeGPU(refIdx_t root, const KdCoord* query, const sint numResults, const sint dim, pair_coord_dist**pqRefs, int q, float mltip);
-	void getSearchResultsGPU(pair_coord_dist** pqRefs, pair_coord_dist* pq, KdCoord* coordinates, const sint numResults, const sint dim, 
+	void searchKdTreeGPU(refIdx_t root, const sint numPoints, const KdCoord* query, const sint numResults, const sint dim, double** interpRefs, int q, float mltip);
+	void getSearchResultsGPU(double** interpRefs, pair_coord_dist* pq, KdCoord* coordinates, const sint numResults, const sint dim, 
 		KdCoord* results, sint numQuerys, float mltip, sint* gindices, double* dists);
 	void accsearchKdTreeGPU(KdNode *node, KdNode kdNodes[], const KdCoord coords[], const KdCoord* query, sint numResults,
 		sint dim, sint axis, pair_coord_dist* pq, sint* counter, float mltip);
+
+private: //Methods specific to interpolation
+	void interpolationGPU(KdCoord* coordinates, sint numPoints, sint numDimensions, sint numQuerys, KdCoord* query, sint numResults, float mltip, double* u, double* v, double* uinter, double* vinter);
+	void getInterpResultsGPU(double** interpRefs, sint numPoints, sint numQuerys, double* u, double* v, double* uinter, double* vinter);
+
 };
 
 

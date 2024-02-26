@@ -740,19 +740,20 @@ void search_funct( KdCoord* coordinates, sint numPoints, sint numDimensions, sin
 
 	TIMER_START();
 	// SEARCH FOR Nearest Neighbour
-	pair_coord_dist* pqRefs[1];
-	Gpu::searchKdTree(coordinates, rootIdx, query, numResults, numDimensions, results, numQuerys, pqRefs, mltip);
-	TIMER_STOP(double searchTime);
-	cout << "Total Search Time = " << searchTime << endl;
+	double* interpRefs[4];
+	Gpu::searchKdTree(coordinates, numPoints, rootIdx, query, numResults, numDimensions, results, numQuerys, interpRefs, mltip);
 
-	TIMER_START();
-	Gpu::getSearchResults(pqRefs, coordinates, numResults, numDimensions, results, numQuerys, mltip, gindices, dists);
-	TIMER_STOP(double getSearchResultsTime);
-	printf("Total time taken to get the results back cudaMemcpy (including cudaMemcpy (Gpu::getSearchResultsGPU) time): %f s\n", getSearchResultsTime);
+	//TIMER_START();
+	// Gpu::getSearchResults(interpRefs, coordinates, numResults, numDimensions, results, numQuerys, mltip, gindices, dists);
+	Gpu::getInterpResults(interpRefs, numPoints, numQuerys, u, v, uinter, vinter);
+	//TIMER_STOP(double getSearchResultsTime);
+	//printf("Total time taken to get the results back cudaMemcpy (including cudaMemcpy (Gpu::getSearchResultsGPU) time): %f s\n", getSearchResultsTime);
 	
 	// cout << "HERE " << numPoints<<endl;
 	Gpu::interpolation(coordinates, numPoints, numDimensions, numQuerys, query, numResults, gindices, dists, mltip, u, v, uinter, vinter);
 	
+	TIMER_STOP(double searchTime);
+	cout << "Total Search Time = " << searchTime << endl;
 	
 }
 

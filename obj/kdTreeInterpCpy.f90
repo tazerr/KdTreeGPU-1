@@ -91,6 +91,8 @@ real time_s, time_einter, time_esearch, time_sinter
 REAL(c_double), ALLOCATABLE :: tarry(:,:,:)
 INTEGER(c_int) :: tx,ty,tz
 REAL(c_double), ALLOCATABLE :: u(:,:,:,:), v(:,:,:,:), uinter(:,:,:,:), vinter(:,:,:,:)
+REAL, ALLOCATABLE :: error_u(:,:,:,:), error_v(:,:,:,:)
+
 
 !!**********************************TARRY*****************************************
 !tx=3
@@ -125,9 +127,9 @@ ALLOCATE(NJ(nblocks))
 ALLOCATE(NK(nblocks)) 
  
 nbl =1
-NI(nbl) = 32
-NJ(nbl) = 32
-NK(nbl) = 32
+NI(nbl) = 256
+NJ(nbl) = 256
+NK(nbl) = 1
 
 NImax = maxval(NI)
 NJmax = maxval(NJ)
@@ -185,8 +187,8 @@ ALLOCATE(NJnew(nblocksnew))
 ALLOCATE(NKnew(nblocksnew))
  
 nbl =1
-NInew(nbl) = 2
-NJnew(nbl) = 1
+NInew(nbl) = 128
+NJnew(nbl) = 128
 NKnew(nbl) = 1
    	
 NImaxnew = maxval(NInew)
@@ -229,6 +231,9 @@ ALLOCATE(v(NImax,NJmax,NKmax,nblocks))
 
 ALLOCATE(uinter(NImaxnew,NJmaxnew,NKmaxnew,nblocksnew))
 ALLOCATE(vinter(NImaxnew,NJmaxnew,NKmaxnew,nblocksnew))
+
+ALLOCATE(error_u(NImaxnew,NJmaxnew,NKmaxnew,nblocksnew))
+ALLOCATE(error_v(NImaxnew,NJmaxnew,NKmaxnew,nblocksnew))
 
 ALLOCATE(coordinates(sizeOfarray))
 DO nbl = 1, nblocks
@@ -290,6 +295,7 @@ END DO
 
 !***************************************call searching of KD tree******************************************
 call cpu_time(time_s)
+print*, time_s
 
 CALL custom_funct(coordinates, numPoints, numQuerys, query, results, numResults, rootIdx)
 
@@ -298,6 +304,9 @@ CALL search_funct(coordinates, numPoints, numDimensions, numQuerys, query, resul
 
 !pause
 call cpu_time(time_esearch)
+print*, time_esearch
+print*, "TOTAL TIME TAKEN FOR SEARCH + GETTING RESULTS BACK: ", time_esearch-time_s
+
 !***************************************Print Result******************************************
 open(1,file='grid.xyz',form='unformatted')
 	  
@@ -342,13 +351,29 @@ open (7, form = 'unformatted', file = 'flow_main.xyz')
 		
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-nbl=1
+DO nbl = 1, nblocksnew
+    DO k = 1, NKnew(nbl)
+        DO j = 1, NJnew(nbl)
+            DO i = 1, NInew(nbl)
+			
+				error_u(i,j,k,nbl) = abs(uinter(i,j,k,nbl) - (Xgridnew(i,j,k,nbl)**2 + Ygridnew(i,j,k,nbl)**2))
+				error_v(i,j,k,nbl) = abs(vinter(i,j,k,nbl) - (sin(Xgridnew(i,j,k,nbl)) * cos(Ygridnew(i,j,k,nbl)**2)))
+            
+            END DO
+        END DO
+    END DO
+END DO
+
+
+
 open (7, form = 'unformatted', file = 'flow_query.xyz')
 		write(7) nblocksnew
-		write(7) (NInew(nbl), NJnew(nbl), NKnew(nbl),2, nbl = 1, nblocksnew)
+		write(7) (NInew(nbl), NJnew(nbl), NKnew(nbl),4, nbl = 1, nblocksnew)
 		Do nbl = 1,nblocksnew
 		write(7) ((( uinter(i,j,k,nbl), i = 1,NInew(nbl)), j = 1,NJnew(nbl)),k=1,NKnew(nbl)) 		&
-			, 		((( vinter(i,j,k,nbl), i = 1,NInew(nbl)), j = 1,NJnew(nbl)),k=1,NKnew(nbl)) 
+			, 		((( vinter(i,j,k,nbl), i = 1,NInew(nbl)), j = 1,NJnew(nbl)),k=1,NKnew(nbl))  		&
+			, 		((( error_u(i,j,k,nbl), i = 1,NInew(nbl)), j = 1,NJnew(nbl)),k=1,NKnew(nbl))  		&
+			, 		((( error_v(i,j,k,nbl), i = 1,NInew(nbl)), j = 1,NJnew(nbl)),k=1,NKnew(nbl)) 
 		END DO
 		close(7)
 
@@ -469,7 +494,6 @@ open (7, form = 'unformatted', file = 'flow_query.xyz')
 !
 !call cpu_time(time_einter)
 !
-print*, "TOTAL TIME TAKEN FOR SEARCH + GETTING RESULTS BACK: ", time_esearch-time_s
 !print*, time_einter-time_sinter
 
 !DO i=1, numQuerys*numResults
