@@ -1188,91 +1188,6 @@ void Gpu::gpuSetup(int gpu_max, int threads, int blocks, int dim){
 #endif
 }
 
-/*
- * GPU function to find the nearest neighbour 
- * The kd tree is assumed to be stores on GPU
- * and the result array will also be stored on GPU 
- */
-__global__ void cusearchKdTreeGPU(KdNode *node, KdNode kdNodes[], const KdCoord coords[], const KdCoord* query, const sint* numResults,
-		const sint* dim, sint axis, pair_coord_dist* pq, sint* counter, float* mltip) {
-
-	pair_coord_dist nd_pair;
-	nd_pair.tpl = node->tuple;
-
-	//distCalc<<< 1, 1>>>(&nd_pair, query, coords, dim);
-	double dx = coords[(nd_pair.tpl)*(*dim) + 0]/(*mltip) - query[0];
-    double dy = coords[(nd_pair.tpl)*(*dim) + 1]/(*mltip) - query[1];
-    double dz = coords[(nd_pair.tpl)*(*dim) + 2]/(*mltip) - query[2];
-
-	nd_pair.dist = (dx*dx + dy*dy + dz*dz);
-
-	//insertSort<<< 1, 1>>>(pq, numResults);
-	if (*counter<(*numResults)) {
-		pq[*counter]=nd_pair;
-		*counter = (*counter) +1;
-		for (int i=1; i<(*counter); i++) {
-			pair_coord_dist key = pq[i];
-			int j=i-1;
-
-			while (j >= 0 && pq[j].dist > key.dist) {
-				pq[j+1] = pq[j];
-				j=j-1;
-			}
-
-			pq[j+1] = key;
-		}
-	}
-	else if (nd_pair.dist < pq[(*numResults)-1].dist) {
-		pq[(*numResults)-1] = nd_pair;
-		for (int i=1; i<(*numResults); i++) {
-			pair_coord_dist key = pq[i];
-			int j=i-1;
-
-			while (j >= 0 && pq[j].dist > key.dist) {
-				pq[j+1] = pq[j];
-				j=j-1;
-			}
-
-			pq[j+1] = key;
-		}
-	}
-
-	double perp_ = coords[node->tuple*(*dim) + axis]/(*mltip) - query[axis];
-
-	axis = (axis+1) % 3;
-
-	if (pow(perp_,2)<pq[*counter-1].dist){
-
-		if (node->ltChild!=-1)
-		{
-			cusearchKdTreeGPU<<< 1, 1>>>(&kdNodes[node->ltChild], kdNodes, coords, query, numResults, dim, axis, pq, counter, mltip);
-		}
-		
-		if (node->gtChild!=-1)
-		{
-			cusearchKdTreeGPU<<< 1, 1>>>(&kdNodes[node->gtChild], kdNodes, coords, query, numResults, dim, axis, pq, counter, mltip);
-		}
-    }
-
-	else 
-	{
-        if (perp_<0) 
-		{
-			if (node->gtChild!=-1)
-			{
-				cusearchKdTreeGPU<<< 1, 1>>>(&kdNodes[node->gtChild], kdNodes, coords, query, numResults, dim, axis, pq, counter, mltip);
-			}	
-        }
-        else 
-		{
-			if (node->ltChild!=-1)
-			{
-				cusearchKdTreeGPU<<< 1, 1>>>(&kdNodes[node->ltChild], kdNodes, coords, query, numResults, dim, axis, pq, counter, mltip);
-			}
-		}
-    }
-}
-
 __global__ void printResult(pair_coord_dist* pq, const sint* numResults, const KdCoord* coords, const sint* dim, float* mltip) {
 
 	printf("\n");
@@ -1360,6 +1275,12 @@ __device__ void insertInList(KdNode* node, litem** ch, const sint* dim) {
     ch[1] = li;
 }
 
+
+/*
+ * GPU function to find the nearest neighbour 
+ * The kd tree is assumed to be stores on GPU
+ * and the result array will also be stored on GPU 
+ */
 __global__ void cuIterSearchKdTree(KdNode *root, KdNode kdNodes[], const KdCoord coords[], const KdCoord* query, const sint* numResults,
 		const sint* dim, sint* counter, float* mltip, sint* batchSize, pair_coord_dist* gpq, litem* glist, sint currBatch, sint currBatchSize, sint sizeOfList) {
 
@@ -1373,35 +1294,24 @@ __global__ void cuIterSearchKdTree(KdNode *root, KdNode kdNodes[], const KdCoord
 		sint dcounter=0;
 		
 		litem *ls = llist;
-		// cudaMalloc((void**)&ls,sizeof(litem));
+		
 		ls->data = root;
 		ls->axis=0;
-		// ls->next=nullptr;
+		
 		litem* ch[2];
 		ch[0] = ls;
 		ch[1] = ls;
-
-		//printf("%d\n", tid);
-
-		//printf("Query Point %d :: %f %f %f, SOL: %d\n", tid, qu[0], qu[1], qu[2], sizeOfList);
 
 		int numIter=0;
 		
 		while(ch[0]!=ch[1] || ch[0]->data==root) {
 			
 			numIter++;
-			// printf("%d\n", numIter);
 			pair_coord_dist nd_pair;
 
-			//printf("Assigned ndcoord\n");
 			nd_pair.tpl = ch[0]->data->tuple;
-
-			//printf("Assigned ndcoord tpl\n");
 			distCalc(&nd_pair, qu, coords, dim, mltip);
-			//printf("Calculated Distance\n");
-
 			insertSort(pq, &dcounter, numResults, &nd_pair);
-			//printf("Inserted the pair in pq\n");
 
 			double perp_ = coords[ch[0]->data->tuple*(*dim) + ch[0]->axis]/(*mltip) - qu[ch[0]->axis];
 
@@ -1409,17 +1319,12 @@ __global__ void cuIterSearchKdTree(KdNode *root, KdNode kdNodes[], const KdCoord
 
 				if (ch[0]->data->ltChild!=-1)
 				{
-					
-					//printf("Inside 1st if %d %d\n", ch[0]->data->ltChild, sizeof(kdNodes));
 					insertInList(&kdNodes[ch[0]->data->ltChild], ch, dim);
-					//printf("Exit 1st if\n");
 				}
 				
 				if (ch[0]->data->gtChild!=-1)
 				{
-					//printf("Inside 2ns if\n");
 					insertInList(&kdNodes[ch[0]->data->gtChild], ch, dim);
-					//printf("Exit 2nd if\n");
 				}
 			}
 
@@ -1429,34 +1334,21 @@ __global__ void cuIterSearchKdTree(KdNode *root, KdNode kdNodes[], const KdCoord
 				{
 					if (ch[0]->data->gtChild!=-1)
 					{
-						//printf("Inside 3rd if\n");
 						insertInList(&kdNodes[ch[0]->data->gtChild], ch, dim);
-						//printf("Exit 3rd if\n");
 					}	
 				}
 				else 
 				{
 					if (ch[0]->data->ltChild!=-1)
 					{
-						//printf("Inside 4th if\n");
 						insertInList(&kdNodes[ch[0]->data->ltChild], ch, dim);
-						//printf("Exit 4th if\n");
 					}
 				}
 			}
-			// litem* temp = ch[0];
-			// ch[0] = ch[0]->next;
 
 			ch[0] = ch[0]+1;
-			// cudaFree(temp);
-			//printf("changed the current pointer\n");
 
 		}
-		
-		//printResult<<<1,1>>>(pq, numResults, coords, dim, mltip);
-	//	printf("tid: %d :::: Iter:%d :::: BatchSize %d\n\n",tid, numIter, *batchSize);
-		// printResult<<<1,1>>>(pq, numResults, coords, dim, mltip);
-
 
 	}
 
@@ -1502,41 +1394,7 @@ __global__ void cuInterpolation(KdCoord* coordinates, sint numPoints, sint numDi
 	}
 }
 
-
-
-
-// void Gpu::getSearchResultsGPU(pair_coord_dist** pqRefs, pair_coord_dist* pq, KdCoord* coordinates, const sint numResults,
-// 	const sint dim, KdCoord* results, sint numQuerys, float mltip, sint* gindices, double* dists) {
-	
-// 	setDevice();
-
-// 	cudaEvent_t start, stop;
-// 	cudaEventCreate(&start);
-// 	cudaEventCreate(&stop);
-// 	cudaEventRecord(start);
-// 	checkCudaErrors(cudaMemcpy(pq, pqRefs[0], sizeof(pair_coord_dist)*numResults*numQuerys, cudaMemcpyDeviceToHost));
-// 	cudaEventRecord(stop);
-// 	cudaEventSynchronize(stop);
-
-// 	float cudaMemcpySeconds = 0;
-// 	cudaEventElapsedTime(&cudaMemcpySeconds, start, stop);
-// 	cudaMemcpySeconds = cudaMemcpySeconds/1000;
-// 	printf("cudaMemcpy (Gpu::getSearchResultsGPU) execution time: %f s\n", cudaMemcpySeconds);
-
-
-// 	for(sint ind=0; ind<numResults*numQuerys; ind++) {
-		
-// 		for (sint i = 0; i < dim; i++) {
-// 			results[(ind*dim)+i] = coordinates[((pq[ind].tpl)*dim)+i]/mltip;
-// 		}
-
-// 		gindices[ind] = pq[ind].tpl;
-// 		dists[ind] = pow(pq[ind].dist,0.5);
-
-// 	}
-// }
-
-
+//wrapper function that allocates memory on GPU and calls the cuda kernel cuIterSearchKdTree
 void Gpu::searchKdTreeGPU(refIdx_t root, const sint numPoints, const KdCoord* query, const sint numResults, const sint numDimensions, double** interpRefs, sint numQuerys, float mltip) {
 	setDevice();
 
@@ -1570,12 +1428,11 @@ void Gpu::searchKdTreeGPU(refIdx_t root, const sint numPoints, const KdCoord* qu
 	checkCudaErrors(cudaMalloc((void **) &d_counter, sizeof(sint)));
 	checkCudaErrors(cudaMemcpy(d_counter, &counter, sizeof(sint), cudaMemcpyHostToDevice));
 	
-	// printf("SIZE: %ld bytes", 33000*q*sizeof(litem));
+	//User give values: batchSize, sizeOfList
 	sint batchSize=1000;
 	sint sizeOfList=170000;
 	checkCudaErrors(cudaMalloc((void **) &glist, sizeOfList*batchSize*sizeof(litem)));
 	checkCudaErrors(cudaDeviceSynchronize());
-	// printf("MEMORY ALLOCATED\n");
 
 	cudaEvent_t start, stop;
 	cudaEventCreate(&start);
@@ -1609,27 +1466,10 @@ void Gpu::searchKdTreeGPU(refIdx_t root, const sint numPoints, const KdCoord* qu
 	cudaEventElapsedTime(&searchSeconds, start, stop);
 	searchSeconds = searchSeconds/1000;
 	
-	// printf("SIZE: %ld bytes\n", 33000*q*sizeof(litem));
-	//checkCudaErrors(cudaDeviceSynchronize());
-
-	//checkCudaErrors(cudaDeviceSynchronize());
-
-	// cudaEventRecord(start);
-	//printResultwhole<<<1,1>>>(d_pq, d_numQuerys, d_numResults, d_coord, d_dim, d_mltip);
 	checkCudaErrors(cudaDeviceSynchronize());
 	
-	// cudaEventRecord(stop);
-	// cudaEventSynchronize(stop);
-	// float printSeconds;
-	// cudaEventElapsedTime(&printSeconds, start, stop);
-	// printSeconds = printSeconds/1000;
-	// printf("cuIterSearchKdTree Kernel execution time: %f s\n", searchSeconds);
-	// printf("printResultwhole Kernel execution time: %f s\n", printSeconds);
-
-
 	cudaEventDestroy(start);
 	cudaEventDestroy(stop);
-	//checkCudaErrors(cudaDeviceSynchronize());
 
 	double* d_u, *d_v, *d_uinter, *d_vinter;
 
@@ -1647,11 +1487,6 @@ void Gpu::searchKdTreeGPU(refIdx_t root, const sint numPoints, const KdCoord* qu
 	interpRefs[1]=d_v;
 	interpRefs[2]=d_uinter;
 	interpRefs[3]=d_vinter;
-//	printResultwhole<<<1,1>>>(d_pq, d_numQuerys, d_numResults, d_coord, d_dim, d_mltip, d_query);
-
-	//checkCudaErrors(cudaMemcpy(pqRefs, d_pqRefs, sizeof(pair_coord_dist*)*q, cudaMemcpyDeviceToHost));
-
-	//temp<<<1,1>>>(pqRefs[q], d_coord, d_numResults, d_dim);
 }
 
 
@@ -1662,13 +1497,6 @@ void Gpu::searchKdTree(KdCoord* coordinates, const sint numPoints, refIdx_t root
 
 }
 
-// void Gpu::getSearchResults(double** interpRefs, KdCoord* coordinates, const sint numResults,
-// 	const sint dim, KdCoord* results, sint numQuerys, float mltip, sint* gindices, double* dists) {
-
-// 	pair_coord_dist pq[numResults*numQuerys];
-// 	gpus[0]->getSearchResultsGPU(interpRefs, pq, coordinates, numResults, dim, results, numQuerys, mltip, gindices, dists);
-
-// }
 
 void Gpu::getInterpResults(double** interpRefs, sint numPoints, sint numQuerys, double* u, double* v, double* uinter, double* vinter) {
 
@@ -1690,49 +1518,7 @@ void Gpu::getInterpResultsGPU(double** interpRefs, sint numPoints, sint numQuery
 
 void Gpu::interpolation(KdCoord* coordinates, sint numPoints, sint numDimensions, sint numQuerys, KdCoord* query, sint numResults, sint* gindices, double* dists, float mltip, double* u, double* v, double* uinter, double* vinter) {
 
-
-	// double u[numPoints];
-	// double v[numPoints];
-
-	// for(int i=0; i<numPoints; i++) {
-	// 	u[i] = pow(coordinates[i*numDimensions]/mltip,2)+pow(coordinates[i*numDimensions+1]/mltip,2);//+pow(coordinates[i*numDimensions+2]/mltip,2);
-	// 	v[i] = sin(coordinates[i*numDimensions]/mltip)*cos(pow(coordinates[i*numDimensions+1]/mltip,2));//*sin(coordinates[i*numDimensions+2]/mltip);
-	// 	// printf("u: %lf, v: %fl\n", u[i], v[i]);
-	// }
-
-	// // double uinter[numQuerys], vinter[numQuerys];
-	// double totalwt;
-
-	// for(sint n=0; n<numQuerys; n++) {
-	// 	uinter[n]=0;
-	// 	vinter[n]=0;
-	// 	totalwt=0;
-
-	// //	printf("\n");
-
-	// //	printf("Query: %f  %f %f \n", query[n*numDimensions],query[n*numDimensions+1], query[n*numDimensions+2]);
-
-	// 	for(sint i=0; i<numResults; i++) {
-	// 		totalwt = 1/(pow(dists[n*numResults+i],2)) + totalwt;
-			
-	// 		uinter[n]=uinter[n]+u[(gindices[n*numResults+i])]/pow(dists[n*numResults+i],2);
-	// 		vinter[n]=vinter[n]+v[(gindices[n*numResults+i])]/pow(dists[n*numResults+i],2);
-
-	// 		// uinter[n]=uinter[n]+u[n*numResults+i]/pow(dists[n*numResults+i],2);
-	// 		// vinter[n]=vinter[n]+v[n*numResults+i]/pow(dists[n*numResults+i],2);
-
-	// //		printf("NearestNeigbour(%d) with gInd %d: x:%f y:%f z:%f, u:%lf, v:%lf \n", i, gindices[n*numResults+i], coordinates[gindices[n*numResults+i]*numDimensions]/mltip, coordinates[gindices[n*numResults+i]*numDimensions+1]/mltip, coordinates[gindices[n*numResults+i]*numDimensions+2]/mltip, u[n*numResults+i], v[n*numResults+i]);
-
-	// 	}
-
-	// 	uinter[n] = uinter[n]/totalwt;
-	// 	vinter[n] = vinter[n]/totalwt;
-
-	// //	printf("totalwt: %lf, uinter: %lf, vinter: %lf\n", totalwt, uinter[n], vinter[n]);
-
-	// }
-
-	gpus[0]->interpolationGPU(coordinates, numPoints, numDimensions, numQuerys, query, numResults, mltip, u, v, uinter, vinter);
+	//gpus[0]->interpolationGPU(coordinates, numPoints, numDimensions, numQuerys, query, numResults, mltip, u, v, uinter, vinter);
 
 	float uerror[numQuerys], verror[numQuerys];
 
@@ -1740,7 +1526,9 @@ void Gpu::interpolation(KdCoord* coordinates, sint numPoints, sint numDimensions
 		uerror[n] = abs(uinter[n] - (pow(query[n*numDimensions],2)+pow(query[n*numDimensions+1],2)+pow(query[n*numDimensions+2],2)));
 		verror[n] = abs(vinter[n] - (sin(query[n*numDimensions])*cos(pow(query[n*numDimensions+1],2))*sin(query[n*numDimensions+2])));
 	}
+	
 	double maxu, maxv, minu, minv;
+	
 	for(sint n=0; n<numQuerys; n++) {
 		if(n==0) {
 			maxu=uerror[n];
@@ -1753,26 +1541,9 @@ void Gpu::interpolation(KdCoord* coordinates, sint numPoints, sint numDimensions
 		if(verror[n]>maxv) maxv=verror[n];
 		if(uerror[n]<minu) minu=uerror[n];
 		if(verror[n]<minv) minv=verror[n];
-		// printf("\nuerror[%d] = %lf\n", n, uerror[n]);
-		// printf("verror[%d] = %lf\n", n, verror[n]);
+
 	}
 
 	printf("maxu: %lf, maxv: %lf, minu: %lf, minv: %lf", maxu, maxv, minu, minv);
 }
 
-void Gpu::interpolationGPU(KdCoord* coordinates, sint numPoints, sint numDimensions, sint numQuerys, KdCoord* query, sint numResults, float mltip, double* u, double* v, double* uinter, double* vinter){
-	// double* d_u, *d_v, *d_uinter, *d_vinter;
-
-	// checkCudaErrors(cudaMalloc((void **) &d_u, sizeof(double)*numPoints)); 
-	// checkCudaErrors(cudaMalloc((void **) &d_v, sizeof(double)*numPoints)); 
-
-	// checkCudaErrors(cudaMalloc((void **) &d_uinter, sizeof(double)*numQuerys)); 
-	// checkCudaErrors(cudaMalloc((void **) &d_vinter, sizeof(double)*numQuerys)); 
-
-	// cuCalculateGrid<<<numBlocks, numThreads>>>(d_coord, numPoints, numDimensions, mltip, d_u, d_v);
-
-	// cuInterpolation<<<numBlocks, numThreads>>>(d_coord, numPoints, numDimensions, numQuerys, d_query, numResults, mltip, d_u, d_v, d_uinter, d_vinter, results);
-
-
-
-}
