@@ -223,21 +223,6 @@ obj/mergeSort.o:src/mergeSort.cu src/mergeSort_common.h src/KdNode.h
 obj/removeDups.o:src/removeDups.cu src/removeDups_common.h
 	$(EXEC) $(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c $<
 
-#obj/kdTreeInterp.o:obj/kdTreeInterp.f90
-#	$(EXEC) $(FC) $(FCFLAGS) -o $@ -c $<
-
-#program1:obj/kdTreeInterp.o obj/removeDups.o obj/KdTreeGPUsms.o obj/Gpu.o obj/mergeSort.o obj/buildKdTree.o
-#	$(EXEC) $(NVCC) -o $@ $+ $(LIBRARIES)
-
-#program1:obj/kdTreeInterp.o obj/removeDups.o obj/KdTreeGPUsms.o obj/Gpu.o obj/mergeSort.o obj/buildKdTree.o 
-#  $(EXEC) $(NVCC) -o $@ $+ $(LIBRARIES)
-#kdTreeGPUsms: obj/removeDups.o obj/KdTreeGPUsms.o obj/Gpu.o obj/mergeSort.o obj/buildKdTree.o
-#	$(EXEC) $(NVCC) $(ALL_LDFLAGS) $(GENCODE_FLAGS) -o $@ $+ $(LIBRARIES)
-
-
-#	$(EXEC) mkdir -p ../../bin/$(OS_ARCH)/$(OSLOWER)/$(TARGET)$(if $(abi),/$(abi))
-#	$(EXEC) cp $@ ../../bin/$(OS_ARCH)/$(OSLOWER)/$(TARGET)$(if $(abi),/$(abi))
-
 run: build
 	$(EXEC) ./obj/*.o
 

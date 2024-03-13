@@ -1275,7 +1275,7 @@ __device__ void insertInList(KdNode* node, litem** ch, const sint* dim) {
     ch[1] = li;
 }
 
-
+	
 /*
  * GPU function to find the nearest neighbour 
  * The kd tree is assumed to be stores on GPU
