@@ -4,20 +4,15 @@ MODULE call_kd_tree
 
     !*************************************C INTERFACE***************************************
     INTERFACE
-        SUBROUTINE custom_funct(coordinates, numPoints, numQuerys, query, results, numResults, rootIdx) bind(C, name="custom_funct")
+        SUBROUTINE createTree_wrapper(coordinates, numPoints, rootIdx) bind(C, name="createTree_wrapper")
             USE iso_c_binding
             REAL(c_float), dimension(*) :: coordinates
             INTEGER(c_int), value :: numPoints
-            INTEGER(c_int), value :: numQuerys
-            REAL(c_float), dimension(*) :: query
-            REAL(c_float), dimension(*) :: results
-			INTEGER(c_int), value :: numResults
 			INTEGER(c_int), intent(inout) :: rootIdx
         END SUBROUTINE
 
 		SUBROUTINE search_funct(coordinates, numPoints, numDimensions, numQuerys, query, results, numResults, rootIdx &
             , mltip, gindices, dists, u, v, uinter, vinter) bind(C, name="search_funct")
-            !@@$acc routine seq
             USE iso_c_binding
             REAL(c_float), dimension(*) :: coordinates
             INTEGER(c_int), value :: numPoints
@@ -35,14 +30,7 @@ MODULE call_kd_tree
             REAL(c_double), dimension(*) :: uinter
             REAL(c_double), dimension(*) :: vinter
         END SUBROUTINE
-
-        SUBROUTINE temp_funct(tarry, tx, ty, tz) bind(C, name="temp_funct")
-            USE iso_c_binding
-            REAL(c_double), dimension(*) :: tarry
-            INTEGER(c_int), value :: tx
-            INTEGER(c_int), value :: ty
-            INTEGER(c_int), value :: tz
-        END SUBROUTINE
+        
     END INTERFACE
 END MODULE call_kd_tree
 
@@ -258,16 +246,14 @@ END DO
 
 !***************************************call creating and searching of KD tree******************************************
 call cpu_time(time_s)
-print*, time_s
 
-CALL custom_funct(coordinates, numPoints, numQuerys, query, results, numResults, rootIdx)
+CALL createTree_wrapper(coordinates, numPoints, rootIdx)
 
 CALL search_funct(coordinates, numPoints, numDimensions, numQuerys, query, results, numResults, rootIdx, mltip &
     , gindices, dists, u, v, uinter, vinter) 	
 
 !pause
 call cpu_time(time_esearch)
-print*, time_esearch
 print*, "TOTAL TIME TAKEN FOR SEARCH + GETTING RESULTS BACK: ", time_esearch-time_s
 
 !***************************************Write out results******************************************
